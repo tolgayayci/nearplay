@@ -1,0 +1,58 @@
+# Rust build artifacts
+/target/
+base_project/target/
+**/*.rs.bk
+*.pdb
+
+# IDE and editor files
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Project directories
+/projects/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencies (if using npm for any tooling)
+node_modules/
+
+# Test coverage
+*.profraw
+*.profdata
+/coverage/
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+update-traefik.sh
+build-and-deploy.sh
+.env.example
+base_project
+
+Dockerfile
+Dockerfile.light
+docker-compose.yml
+docker-compose.prod.yml
+traefik-docker-compose.yml
+.traefik/
+.dockerignore

@@ -1,0 +1,13 @@
+[build]
+  base = "/"
+  command = "vite build"
+  publish = "dist"
+  
+[build.environment]
+  NODE_VERSION = "18"
+  VITE_SKIP_TYPECHECK = "true"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200 
