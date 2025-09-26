@@ -148,8 +148,11 @@ export function ProjectList({
                     <div className="p-2 rounded-md bg-primary/10 group-hover:bg-primary/20">
                       <Code2Icon className="h-4 w-4 text-primary" />
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="font-medium group-hover:text-primary truncate">
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <span
+                        className="font-medium group-hover:text-primary truncate max-w-[200px]"
+                        title={project.name}
+                      >
                         {project.name}
                       </span>
                       {(project as any).deployment_count > 0 ? (

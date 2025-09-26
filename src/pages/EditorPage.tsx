@@ -1,39 +1,56 @@
-import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { FileCode2, Terminal, PlayCircle, Wand2, Clock, Calendar, Pencil, Check, X, Share2, Bug } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Editor } from '@/components/Editor';
-import { useToast } from '@/hooks/use-toast';
-import { Project, CompilationResult } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
-import { compileContract } from '@/lib/api';
-import { useAuth } from '@/App';
-import { UserNav } from '@/components/UserNav';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { CompilerView } from '@/components/views/CompilerView';
-import { ABIView } from '@/components/views/ABIView';
-import { cn } from '@/lib/utils';
-import { SEO } from '@/components/seo/SEO';
-import { ShareProjectDialog } from '@/components/ShareProjectDialog';
-import { DeployDialog } from '@/components/editor/DeployDialog';
-import { Badge } from '@/components/ui/badge';
+import { useEffect, useState, useRef } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import {
+  FileCode2,
+  Terminal,
+  PlayCircle,
+  Wand2,
+  Clock,
+  Calendar,
+  Pencil,
+  Check,
+  X,
+  Share2,
+  Bug,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Editor } from "@/components/Editor";
+import { useToast } from "@/hooks/use-toast";
+import { Project, CompilationResult } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
+import { compileContract } from "@/lib/api";
+import { useAuth } from "@/App";
+import { UserNav } from "@/components/UserNav";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { CompilerView } from "@/components/views/CompilerView";
+import { ABIView } from "@/components/views/ABIView";
+import { cn } from "@/lib/utils";
+import { SEO } from "@/components/seo/SEO";
+import { ShareProjectDialog } from "@/components/ShareProjectDialog";
+import { DeployDialog } from "@/components/editor/DeployDialog";
+import { Badge } from "@/components/ui/badge";
 
 const VIEWS = [
-  { id: 'editor', title: 'Editor', icon: FileCode2 },
-  { id: 'abi', title: 'Contract Interface', icon: PlayCircle },
-  { id: 'console', title: 'Console', icon: Terminal },
+  { id: "editor", title: "Editor", icon: FileCode2 },
+  { id: "abi", title: "Contract Interface", icon: PlayCircle },
+  { id: "console", title: "Console", icon: Terminal },
 ] as const;
 
-type ViewId = typeof VIEWS[number]['id'];
+type ViewId = (typeof VIEWS)[number]["id"];
 
 export function EditorPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [isCompiling, setIsCompiling] = useState(false);
-  const [activeViews, setActiveViews] = useState<ViewId[]>(['editor', 'abi', 'console']);
-  const [lastCompilationResult, setLastCompilationResult] = useState<CompilationResult | null>(null);
+  const [activeViews, setActiveViews] = useState<ViewId[]>([
+    "editor",
+    "abi",
+    "console",
+  ]);
+  const [lastCompilationResult, setLastCompilationResult] =
+    useState<CompilationResult | null>(null);
   const [isEditingName, setIsEditingName] = useState(false);
-  const [editedName, setEditedName] = useState('');
+  const [editedName, setEditedName] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [refreshABITrigger, setRefreshABITrigger] = useState(0);
@@ -50,17 +67,17 @@ export function EditorPage() {
     if (!id) return;
 
     const channel = supabase
-      .channel('project_changes')
+      .channel("project_changes")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'projects',
+          event: "UPDATE",
+          schema: "public",
+          table: "projects",
           filter: `id=eq.${id}`,
         },
         (payload) => {
-          setProject(prev => prev ? { ...prev, ...payload.new } : null);
+          setProject((prev) => (prev ? { ...prev, ...payload.new } : null));
         }
       )
       .subscribe();
@@ -73,48 +90,50 @@ export function EditorPage() {
   useEffect(() => {
     const fetchProject = async () => {
       if (!id) return;
-      
+
       try {
         const { data: project, error } = await supabase
-          .from('projects')
-          .select('*')
-          .eq('id', id)
+          .from("projects")
+          .select("*")
+          .eq("id", id)
           .single();
 
         if (error) throw error;
-        if (!project) throw new Error('Project not found');
+        if (!project) throw new Error("Project not found");
 
         setProject(project);
         setEditedName(project.name);
 
         // Fetch last compilation regardless of status
         const { data: compilations, error: compilationError } = await supabase
-          .from('compilation_history')
-          .select('*')
-          .eq('project_id', id)
-          .order('created_at', { ascending: false })
+          .from("compilation_history")
+          .select("*")
+          .eq("project_id", id)
+          .order("created_at", { ascending: false })
           .limit(1);
 
         if (!compilationError && compilations && compilations.length > 0) {
           const lastCompilation = compilations[0];
           setLastCompilationResult({
-            success: lastCompilation.status === 'success',
+            success: lastCompilation.status === "success",
             exit_code: lastCompilation.exit_code,
-            stdout: lastCompilation.stdout || '',
-            stderr: lastCompilation.stderr || '',
-            details: lastCompilation.details || { compilation_time: Date.now() / 1000 },
+            stdout: lastCompilation.stdout || "",
+            stderr: lastCompilation.stderr || "",
+            details: lastCompilation.details || {
+              compilation_time: Date.now() / 1000,
+            },
             abi: lastCompilation.abi,
             code_snapshot: lastCompilation.code_snapshot,
           });
         }
       } catch (error) {
-        console.error('Error fetching project:', error);
+        console.error("Error fetching project:", error);
         toast({
           title: "Error",
           description: "Failed to load project",
           variant: "destructive",
         });
-        navigate('/projects');
+        navigate("/projects");
       }
     };
 
@@ -144,22 +163,24 @@ export function EditorPage() {
     setIsSavingName(true);
     try {
       const { error } = await supabase
-        .from('projects')
-        .update({ 
+        .from("projects")
+        .update({
           name: editedName.trim(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', project.id);
+        .eq("id", project.id);
 
       if (error) throw error;
 
-      setProject(prev => prev ? { ...prev, name: editedName.trim() } : null);
+      setProject((prev) =>
+        prev ? { ...prev, name: editedName.trim() } : null
+      );
       toast({
         title: "Success",
         description: "Project name updated successfully",
       });
     } catch (error) {
-      console.error('Error updating project name:', error);
+      console.error("Error updating project name:", error);
       toast({
         title: "Error",
         description: "Failed to update project name",
@@ -180,30 +201,30 @@ export function EditorPage() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleSaveName();
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       handleCancelEditing();
     }
   };
 
   const handleSave = async () => {
     if (!project) return;
-    
+
     // Fetch the latest project data to update the UI
     try {
       const { data: updatedProject, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', project.id)
+        .from("projects")
+        .select("*")
+        .eq("id", project.id)
         .single();
 
       if (error) throw error;
-      if (!updatedProject) throw new Error('Project not found');
+      if (!updatedProject) throw new Error("Project not found");
 
       setProject(updatedProject);
     } catch (error) {
-      console.error('Error fetching updated project:', error);
+      console.error("Error fetching updated project:", error);
     }
   };
 
@@ -213,16 +234,16 @@ export function EditorPage() {
     // First save the current code
     try {
       const { error: saveError } = await supabase
-        .from('projects')
-        .update({ 
+        .from("projects")
+        .update({
           code: project.code,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', project.id);
+        .eq("id", project.id);
 
       if (saveError) throw saveError;
     } catch (error) {
-      console.error('Error saving code:', error);
+      console.error("Error saving code:", error);
       toast({
         title: "Error",
         description: "Failed to save code before compilation",
@@ -232,7 +253,7 @@ export function EditorPage() {
     }
 
     if (!user) {
-      console.error('EditorPage: No user found during compilation');
+      console.error("EditorPage: No user found during compilation");
       toast({
         title: "Error",
         description: "You must be logged in to compile",
@@ -240,16 +261,15 @@ export function EditorPage() {
       });
       return;
     }
-    
+
     setIsCompiling(true);
     try {
-
       const result = await compileContract(project.code, user.id, project.id);
       setLastCompilationResult(result);
 
       // Save compilation result to history
       const { error: historyError } = await supabase
-        .from('compilation_history')
+        .from("compilation_history")
         .insert({
           project_id: project.id,
           user_id: user.id,
@@ -259,46 +279,47 @@ export function EditorPage() {
             stderr: result.stderr,
             details: result.details,
           },
-          status: result.success ? 'success' : 'error',
+          status: result.success ? "success" : "error",
           exit_code: result.exit_code,
           stdout: result.stdout,
           stderr: result.stderr,
           abi: result.abi,
-          error_type: 'compilation',
+          error_type: "compilation",
           metadata: {
             compilation_time: result.details.compilation_time,
             project_path: result.details.project_path,
-          }
+          },
         });
 
       if (historyError) throw historyError;
 
       // Update project activity
       await supabase
-        .from('projects')
-        .update({ 
+        .from("projects")
+        .update({
           last_activity_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', project.id);
+        .eq("id", project.id);
 
       toast({
         title: result.success ? "Compilation Successful" : "Compilation Failed",
-        description: result.success 
+        description: result.success
           ? "Your code compiled successfully"
           : "Failed to compile your code",
         variant: result.success ? "default" : "destructive",
       });
-      
+
       // Refresh ABI view after successful compilation
       if (result.success && result.abi) {
-        setRefreshABITrigger(prev => prev + 1);
+        setRefreshABITrigger((prev) => prev + 1);
       }
     } catch (error) {
-      console.error('Compilation error:', error);
+      console.error("Compilation error:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to compile project",
+        description:
+          error instanceof Error ? error.message : "Failed to compile project",
         variant: "destructive",
       });
     } finally {
@@ -307,11 +328,11 @@ export function EditorPage() {
   };
 
   const toggleView = (viewId: ViewId) => {
-    setActiveViews(prev => {
+    setActiveViews((prev) => {
       const isActive = prev.includes(viewId);
       if (isActive) {
         // Don't allow removing the last view
-        const newViews = prev.filter(v => v !== viewId);
+        const newViews = prev.filter((v) => v !== viewId);
         return newViews.length > 0 ? newViews : [viewId];
       } else {
         return [...prev, viewId];
@@ -321,13 +342,13 @@ export function EditorPage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: true
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: true,
     }).format(date);
   };
 
@@ -335,7 +356,7 @@ export function EditorPage() {
     setShowDeployDialog(false);
     setShowABIError(false);
     // Trigger ABI view refresh
-    setRefreshABITrigger(prev => prev + 1);
+    setRefreshABITrigger((prev) => prev + 1);
   };
 
   const handleRequestDeploy = () => {
@@ -348,9 +369,11 @@ export function EditorPage() {
         hasValidABI = lastCompilationResult.abi.length > 0;
       }
       // Check for NEAR's official ABI format
-      else if (typeof lastCompilationResult.abi === 'object' &&
-               lastCompilationResult.abi.body?.functions &&
-               Array.isArray(lastCompilationResult.abi.body.functions)) {
+      else if (
+        typeof lastCompilationResult.abi === "object" &&
+        lastCompilationResult.abi.body?.functions &&
+        Array.isArray(lastCompilationResult.abi.body.functions)
+      ) {
         hasValidABI = lastCompilationResult.abi.body.functions.length > 0;
       }
     }
@@ -368,28 +391,31 @@ export function EditorPage() {
   // Handle share dialog close and refresh project data
   const handleShareDialogChange = async (open: boolean) => {
     setShowShareDialog(open);
-    
+
     // If dialog is closing, refresh project data to get latest share status
     if (!open && id) {
       try {
         const { data, error } = await supabase
-          .from('projects')
-          .select('*')
-          .eq('id', id)
+          .from("projects")
+          .select("*")
+          .eq("id", id)
           .single();
 
         if (error) throw error;
         if (data) {
-          setProject(prev => prev ? { ...prev, ...data } : null);
+          setProject((prev) => (prev ? { ...prev, ...data } : null));
         }
       } catch (error) {
-        console.error('Error refreshing project:', error);
+        console.error("Error refreshing project:", error);
       }
     }
   };
 
   const handleReportIssue = () => {
-    window.open('https://github.com/tolgayayci/near-playground/issues/new?labels=bug&template=bug_report.md', '_blank');
+    window.open(
+      "https://github.com/tolgayayci/nearplay/issues/new?labels=bug&template=bug_report.md",
+      "_blank"
+    );
   };
 
   if (!project) {
@@ -403,33 +429,35 @@ export function EditorPage() {
     );
   }
 
-  const hasConsole = activeViews.includes('console');
-  const hasEditor = activeViews.includes('editor');
-  const hasABI = activeViews.includes('abi');
-  const mainHeight = hasConsole ? 'h-[75%]' : 'h-full';
-  const consoleHeight = 'h-[25%]';
+  const hasConsole = activeViews.includes("console");
+  const hasEditor = activeViews.includes("editor");
+  const hasABI = activeViews.includes("abi");
+  const mainHeight = hasConsole ? "h-[75%]" : "h-full";
+  const consoleHeight = "h-[25%]";
 
   const getMainPanelWidth = () => {
     const activeMainViews = [hasEditor, hasABI].filter(Boolean).length;
-    if (activeMainViews === 0) return '100%';
+    if (activeMainViews === 0) return "100%";
     return `${100 / activeMainViews}%`;
   };
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      <SEO 
-        title={project?.name || 'Editor'}
-        description={project?.description || 'Smart contract development environment'}
+      <SEO
+        title={project?.name || "Editor"}
+        description={
+          project?.description || "Smart contract development environment"
+        }
         type="app"
       />
-      
+
       <header className="h-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="h-full flex flex-col justify-center px-4">
           <div className="flex items-center">
             {/* Left side - Project info */}
             <div className="flex-1 flex items-center gap-4">
-              <Link 
-                to="/projects" 
+              <Link
+                to="/projects"
                 className="flex items-center gap-2 hover:text-primary transition-colors"
               >
                 <div className="p-2 bg-primary/10 rounded-lg">
@@ -446,7 +474,7 @@ export function EditorPage() {
                         value={editedName}
                         onChange={(e) => setEditedName(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        className="h-8 text-xl font-semibold bg-background"
+                        className="h-8 text-xl font-semibold bg-background max-w-[300px]"
                         disabled={isSavingName}
                       />
                       <div className="flex items-center gap-1">
@@ -472,7 +500,12 @@ export function EditorPage() {
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <h1 className="text-xl font-semibold">{project.name}</h1>
+                      <h1
+                        className="text-xl font-semibold max-w-[300px] truncate"
+                        title={project.name}
+                      >
+                        {project.name}
+                      </h1>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -481,8 +514,8 @@ export function EditorPage() {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Badge 
-                        variant="outline" 
+                      <Badge
+                        variant="outline"
                         className="px-1 h-4 text-[10px] bg-primary/10 text-primary hover:bg-primary/20"
                       >
                         BETA
@@ -515,29 +548,33 @@ export function EditorPage() {
             {/* Center - View controls */}
             <div className="flex items-center">
               <div className="flex items-center gap-px bg-muted rounded-md border overflow-hidden">
-                {VIEWS.map(view => (
+                {VIEWS.map((view) => (
                   <Button
                     key={view.id}
                     variant="ghost"
                     size="sm"
                     className={cn(
                       "h-8 px-3 gap-2 rounded-none transition-all relative",
-                      activeViews.includes(view.id) ? [
-                        "bg-background text-foreground font-medium",
-                        "before:absolute before:inset-x-0 before:bottom-0 before:h-0.5 before:bg-primary",
-                      ] : [
-                        "text-muted-foreground hover:text-foreground hover:bg-muted/80",
-                        "hover:before:absolute hover:before:inset-x-0 hover:before:bottom-0 hover:before:h-0.5 hover:before:bg-muted-foreground/30",
-                      ],
+                      activeViews.includes(view.id)
+                        ? [
+                            "bg-background text-foreground font-medium",
+                            "before:absolute before:inset-x-0 before:bottom-0 before:h-0.5 before:bg-primary",
+                          ]
+                        : [
+                            "text-muted-foreground hover:text-foreground hover:bg-muted/80",
+                            "hover:before:absolute hover:before:inset-x-0 hover:before:bottom-0 hover:before:h-0.5 hover:before:bg-muted-foreground/30",
+                          ]
                     )}
                     onClick={() => toggleView(view.id)}
                   >
-                    <view.icon className={cn(
-                      "h-4 w-4 transition-colors",
-                      activeViews.includes(view.id) 
-                        ? "text-foreground"
-                        : "text-muted-foreground group-hover:text-foreground"
-                    )} />
+                    <view.icon
+                      className={cn(
+                        "h-4 w-4 transition-colors",
+                        activeViews.includes(view.id)
+                          ? "text-foreground"
+                          : "text-muted-foreground group-hover:text-foreground"
+                      )}
+                    />
                     <span className="text-xs">{view.title}</span>
                   </Button>
                 ))}
@@ -551,10 +588,12 @@ export function EditorPage() {
                 className="h-9 px-3 flex items-center gap-2"
                 onClick={() => handleShareDialogChange(true)}
               >
-                <div className={cn(
-                  "h-2 w-2 rounded-full",
-                  project?.is_public ? "bg-green-500" : "bg-red-500"
-                )} />
+                <div
+                  className={cn(
+                    "h-2 w-2 rounded-full",
+                    project?.is_public ? "bg-green-500" : "bg-red-500"
+                  )}
+                />
                 <Share2 className="h-[1.2rem] w-[1.2rem]" />
               </Button>
 
@@ -590,10 +629,15 @@ export function EditorPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className={cn("flex", mainHeight)}>
           {hasEditor && (
-            <div style={{ width: getMainPanelWidth() }} className="h-full overflow-hidden p-2">
+            <div
+              style={{ width: getMainPanelWidth() }}
+              className="h-full overflow-hidden p-2"
+            >
               <Editor
                 value={project.code}
-                onChange={(code) => setProject(prev => prev ? { ...prev, code } : null)}
+                onChange={(code) =>
+                  setProject((prev) => (prev ? { ...prev, code } : null))
+                }
                 onCompile={handleCompile}
                 isCompiling={isCompiling}
                 projectId={project.id}
@@ -606,7 +650,10 @@ export function EditorPage() {
           )}
 
           {hasABI && (
-            <div style={{ width: getMainPanelWidth() }} className="h-full overflow-hidden p-2">
+            <div
+              style={{ width: getMainPanelWidth() }}
+              className="h-full overflow-hidden p-2"
+            >
               <ABIView
                 projectId={project.id}
                 refreshTrigger={refreshABITrigger}
@@ -618,7 +665,7 @@ export function EditorPage() {
 
         {hasConsole && (
           <div className={cn("border-t overflow-hidden p-2", consoleHeight)}>
-            <CompilerView 
+            <CompilerView
               result={lastCompilationResult}
               isCompiling={isCompiling}
               projectId={project.id}

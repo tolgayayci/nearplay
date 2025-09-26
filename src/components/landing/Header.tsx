@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Sparkles, ArrowRight, Menu, X, BookOpen, Github } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { SignInDialog } from './SignInDialog';
+import { useEffect, useState } from "react";
+import { Sparkles, ArrowRight, Menu, X, BookOpen, Github } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SignInDialog } from "./SignInDialog";
 
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -12,12 +12,14 @@ export function Header() {
       setIsScrolled(window.scrollY > 20);
     };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const handleLaunchClick = () => {
-    const trigger = document.querySelector<HTMLButtonElement>('[data-signin-trigger]');
+    const trigger = document.querySelector<HTMLButtonElement>(
+      "[data-signin-trigger]"
+    );
     if (trigger) {
       trigger.click();
     }
@@ -28,8 +30,8 @@ export function Header() {
       <header
         className={`fixed top-0 z-50 w-full transition-all duration-500 ${
           isScrolled
-            ? 'bg-white/95 backdrop-blur-md shadow-sm py-3'
-            : 'bg-transparent py-6'
+            ? "bg-white/95 backdrop-blur-md shadow-sm py-3"
+            : "bg-transparent py-6"
         }`}
       >
         <div className="container mx-auto px-6">
@@ -37,15 +39,19 @@ export function Header() {
             {/* Logo - Left */}
             <div
               className="flex items-center gap-3 cursor-pointer group flex-1"
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             >
-              <div className={`p-2 rounded-xl transition-all ${
-                isScrolled ? 'bg-teal-50' : 'bg-white/10 backdrop-blur-sm'
-              }`}>
+              <div
+                className={`p-2 rounded-xl transition-all ${
+                  isScrolled ? "bg-teal-50" : "bg-white/10 backdrop-blur-sm"
+                }`}
+              >
                 <Sparkles className="h-5 w-5 text-teal-600" />
               </div>
               <div>
-                <span className="text-xl font-bold text-gray-900">NEAR Playground</span>
+                <span className="text-xl font-bold text-gray-900">
+                  NEAR Playground
+                </span>
               </div>
             </div>
 
@@ -57,8 +63,8 @@ export function Header() {
                 rel="noopener noreferrer"
                 className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
                   isScrolled
-                    ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
-                    : 'text-gray-700 hover:text-gray-900 hover:bg-white/50'
+                    ? "text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-white/50"
                 }`}
               >
                 <BookOpen className="h-4 w-4" />
@@ -66,13 +72,13 @@ export function Header() {
               </a>
 
               <a
-                href="https://github.com/tolgayayci/near-playground"
+                href="https://github.com/tolgayayci/nearplay"
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
                   isScrolled
-                    ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
-                    : 'text-gray-700 hover:text-gray-900 hover:bg-white/50'
+                    ? "text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-white/50"
                 }`}
               >
                 <Github className="h-4 w-4" />
@@ -110,21 +116,25 @@ export function Header() {
       </header>
 
       {/* Mobile Menu */}
-      <div className={`fixed inset-0 z-40 lg:hidden transition-all duration-300 ${
-        isMobileMenuOpen ? 'visible' : 'invisible'
-      }`}>
+      <div
+        className={`fixed inset-0 z-40 lg:hidden transition-all duration-300 ${
+          isMobileMenuOpen ? "visible" : "invisible"
+        }`}
+      >
         {/* Backdrop */}
         <div
           className={`absolute inset-0 bg-black transition-opacity duration-300 ${
-            isMobileMenuOpen ? 'opacity-50' : 'opacity-0'
+            isMobileMenuOpen ? "opacity-50" : "opacity-0"
           }`}
           onClick={() => setIsMobileMenuOpen(false)}
         />
 
         {/* Menu Panel */}
-        <div className={`absolute right-0 top-0 h-full w-72 bg-white shadow-xl transition-transform duration-300 ${
-          isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}>
+        <div
+          className={`absolute right-0 top-0 h-full w-72 bg-white shadow-xl transition-transform duration-300 ${
+            isMobileMenuOpen ? "translate-x-0" : "translate-x-full"
+          }`}
+        >
           <div className="p-6">
             {/* Close button */}
             <div className="flex justify-end mb-8">
@@ -149,7 +159,7 @@ export function Header() {
               </a>
 
               <a
-                href="https://github.com/tolgayayci/near-playground"
+                href="https://github.com/tolgayayci/nearplay"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg font-medium"

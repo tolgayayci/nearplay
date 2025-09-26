@@ -1,12 +1,8 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  LogOut,
-  User as UserIcon,
-  Bug,
-} from 'lucide-react';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { LogOut, User as UserIcon, Bug } from "lucide-react";
 
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,12 +11,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { signOut } from '@/lib/auth';
-import { ProfileDialog } from '@/components/ProfileDialog';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/App';
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { signOut } from "@/lib/auth";
+import { ProfileDialog } from "@/components/ProfileDialog";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/App";
 
 export function UserNav() {
   const { user, refreshUser } = useAuth();
@@ -31,7 +27,7 @@ export function UserNav() {
   const handleSignOut = async () => {
     try {
       await signOut();
-      navigate('/');
+      navigate("/");
     } catch (error) {
       toast({
         title: "Error",
@@ -41,9 +37,11 @@ export function UserNav() {
     }
   };
 
-
   const handleReportIssue = () => {
-    window.open('https://github.com/tolgayayci/near-playground/issues/new?labels=bug&template=bug_report.md', '_blank');
+    window.open(
+      "https://github.com/tolgayayci/nearplay/issues/new?labels=bug&template=bug_report.md",
+      "_blank"
+    );
   };
 
   if (!user) return null;
@@ -52,20 +50,24 @@ export function UserNav() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button 
-            variant="ghost" 
-            className="h-8 w-8 rounded-full"
-          >
+          <Button variant="ghost" className="h-8 w-8 rounded-full">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={`https://avatar.vercel.sh/${user.email}`} alt={user.email} />
-              <AvatarFallback>{user.email.substring(0, 2).toUpperCase()}</AvatarFallback>
+              <AvatarImage
+                src={`https://avatar.vercel.sh/${user.email}`}
+                alt={user.email}
+              />
+              <AvatarFallback>
+                {user.email.substring(0, 2).toUpperCase()}
+              </AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56" align="end" forceMount>
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium leading-none">{user.name || user.email}</p>
+              <p className="text-sm font-medium leading-none">
+                {user.name || user.email}
+              </p>
               <p className="text-xs leading-none text-muted-foreground">
                 {user.email}
               </p>
@@ -96,7 +98,6 @@ export function UserNav() {
         user={user}
         onUserUpdate={() => refreshUser()}
       />
-
     </>
   );
 }

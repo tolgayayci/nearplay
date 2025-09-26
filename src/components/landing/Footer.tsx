@@ -1,39 +1,64 @@
-import { Sparkles, Github, ExternalLink, BookOpen, MessageSquare, GraduationCap, Code2, Users } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import {
+  Sparkles,
+  Github,
+  ExternalLink,
+  BookOpen,
+  MessageSquare,
+  GraduationCap,
+  Code2,
+  Users,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const FOOTER_LINKS = {
   resources: [
-    { label: 'NEAR Docs', href: 'https://docs.near.org/smart-contracts/what-is', external: true },
-    { label: 'Rust SDK', href: 'https://docs.near.org/tools/sdk', external: true },
-    { label: 'Near Tools Community Group', href: 'https://t.me/NEAR_Tools_Community_Group', external: true },
-    { label: 'GitHub', href: 'https://github.com/tolgayayci/near-playground', external: true },
-    { label: 'Discord', href: 'http://near.chat', external: true },
+    {
+      label: "NEAR Docs",
+      href: "https://docs.near.org/smart-contracts/what-is",
+      external: true,
+    },
+    {
+      label: "Rust SDK",
+      href: "https://docs.near.org/tools/sdk",
+      external: true,
+    },
+    {
+      label: "Near Tools Community Group",
+      href: "https://t.me/NEAR_Tools_Community_Group",
+      external: true,
+    },
+    {
+      label: "GitHub",
+      href: "https://github.com/tolgayayci/nearplay",
+      external: true,
+    },
+    { label: "Discord", href: "http://near.chat", external: true },
   ],
   legal: [
-    { label: 'Privacy Policy', href: '#' },
-    { label: 'Terms of Use', href: '#' },
+    { label: "Privacy Policy", href: "#" },
+    { label: "Terms of Use", href: "#" },
   ],
 };
 
 const LEARNING_RESOURCES = [
   {
     icon: GraduationCap,
-    title: 'Interactive Tutorials',
-    description: 'Step-by-step guides for beginners',
-    href: 'https://docs.near.org/tutorials/examples/xcc',
+    title: "Interactive Tutorials",
+    description: "Step-by-step guides for beginners",
+    href: "https://docs.near.org/tutorials/examples/xcc",
   },
   {
     icon: Code2,
-    title: 'Code Examples',
-    description: 'Real-world contract examples',
-    href: 'https://docs.near.org/tutorials/examples/count-near',
+    title: "Code Examples",
+    description: "Real-world contract examples",
+    href: "https://docs.near.org/tutorials/examples/count-near",
   },
   {
     icon: Users,
-    title: 'Community Support',
-    description: 'Get help from other developers',
-    href: 'https://t.me/NEAR_Tools_Community_Group',
+    title: "Community Support",
+    description: "Get help from other developers",
+    href: "https://t.me/NEAR_Tools_Community_Group",
   },
 ];
 
@@ -49,21 +74,18 @@ export function Footer() {
                 <Sparkles className="h-5 w-5 text-teal-600 dark:text-teal-400" />
               </div>
               <div>
-                <span className="text-xl font-bold text-gray-900 dark:text-white">NEAR Playground</span>
+                <span className="text-xl font-bold text-gray-900 dark:text-white">
+                  NEAR Playground
+                </span>
               </div>
             </div>
             <p className="text-muted-foreground mb-6 max-w-sm">
               The fastest way to build, test, and deploy NEAR smart contracts.
             </p>
             <div className="flex items-center gap-4">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-2"
-                asChild
-              >
+              <Button variant="outline" size="sm" className="gap-2" asChild>
                 <a
-                  href="https://github.com/tolgayayci/near-playground"
+                  href="https://github.com/tolgayayci/nearplay"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -71,12 +93,7 @@ export function Footer() {
                   Open Source
                 </a>
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-2"
-                asChild
-              >
+              <Button variant="outline" size="sm" className="gap-2" asChild>
                 <a
                   href="https://docs.near.org/smart-contracts/what-is"
                   target="_blank"

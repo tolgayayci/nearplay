@@ -1,5 +1,5 @@
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -39,7 +39,8 @@ export function getOSInfo() {
     version = userAgent.match(/Windows NT ([0-9.]+)/)?.[1] || "";
   } else if (userAgent.indexOf("Mac") > -1) {
     os = "macOS";
-    version = userAgent.match(/Mac OS X ([0-9._]+)/)?.[1]?.replace(/_/g, '.') || "";
+    version =
+      userAgent.match(/Mac OS X ([0-9._]+)/)?.[1]?.replace(/_/g, ".") || "";
   } else if (userAgent.indexOf("Linux") > -1) {
     os = "Linux";
   }
@@ -48,10 +49,14 @@ export function getOSInfo() {
 }
 
 // Format bug report URL with all necessary information
-export function formatBugReportUrl(userId: string, projectId: string, code: string) {
+export function formatBugReportUrl(
+  userId: string,
+  projectId: string,
+  code: string
+) {
   const template = "bug_report.md";
-  const baseUrl = "https://github.com/tolgayayci/near-playground/issues/new";
-  
+  const baseUrl = "https://github.com/tolgayayci/nearplay/issues/new";
+
   const params = new URLSearchParams({
     template,
     labels: "bug",
@@ -65,12 +70,15 @@ export function formatBugReportUrl(userId: string, projectId: string, code: stri
       `userId: ${userId}`,
       `projectId: ${projectId}`,
       `code: |`,
-      code.split('\n').map(line => `  ${line}`).join('\n'),
+      code
+        .split("\n")
+        .map((line) => `  ${line}`)
+        .join("\n"),
       `browser: ${getBrowserInfo()}`,
       `os: ${getOSInfo()}`,
       `timestamp: ${new Date().toISOString()}`,
       "```",
-    ].join('\n')
+    ].join("\n"),
   });
 
   return `${baseUrl}?${params.toString()}`;
