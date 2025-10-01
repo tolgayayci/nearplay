@@ -257,6 +257,12 @@ export function ABIView({ projectId, isSharedView = false, onDeploy, onRequestDe
                       paramsStructure: m.params ? JSON.stringify(m.params, null, 2) : 'none'
                     })));
 
+                    // Filter out private and init methods (not callable externally)
+                    methods = methods.filter((method: any) => {
+                      const modifiers = method.modifiers || [];
+                      return !modifiers.includes('private') && !modifiers.includes('init');
+                    });
+
                     // Ensure each method has required fields and convert NEAR ABI format
                     methods = methods.map((method: any) => {
                       // Convert NEAR ABI format to standard format
@@ -368,10 +374,22 @@ export function ABIView({ projectId, isSharedView = false, onDeploy, onRequestDe
                         }];
                       }
 
+                      // Determine stateMutability based on NEAR ABI kind and modifiers
+                      let stateMutability = 'nonpayable';
+                      const modifiers = method.modifiers || [];
+
+                      if (method.kind === 'view') {
+                        stateMutability = 'view';
+                      } else if (modifiers.includes('payable')) {
+                        stateMutability = 'payable';
+                      } else if (method.kind === 'call') {
+                        stateMutability = 'nonpayable';
+                      }
+
                       return {
                         ...method,
                         type: method.type || 'function',
-                        stateMutability: method.stateMutability || (method.kind === 'view' ? 'view' : 'nonpayable'),
+                        stateMutability: method.stateMutability || stateMutability,
                         inputs: inputs,
                         outputs: outputs
                       };

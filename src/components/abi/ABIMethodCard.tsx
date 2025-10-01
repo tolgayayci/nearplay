@@ -23,23 +23,26 @@ export function ABIMethodCard({
   const [isHovered, setIsHovered] = useState(false);
 
   const getBadgeStyles = () => {
-    if (method.type === 'event') return "bg-blue-500/10 text-blue-500";
-    if (method.type === 'error') return "bg-red-500/10 text-red-500";
-    if (method.type === 'constructor') return "bg-purple-500/10 text-purple-500";
+    if (method.type === 'event') return "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20";
+    if (method.type === 'error') return "bg-red-500/10 text-red-500 hover:bg-red-500/20";
+    if (method.type === 'constructor') return "bg-purple-500/10 text-purple-500 hover:bg-purple-500/20";
     if (method.type === 'function' || !method.type) {
+      // View functions (read-only) - green
       if (method.stateMutability === 'view' || method.stateMutability === 'pure') {
-        return "bg-green-500/10 text-green-500";
+        return "bg-green-500/10 text-green-500 hover:bg-green-500/20";
       }
-      if (method.stateMutability === 'nonpayable') {
-        return "bg-orange-500/10 text-orange-500";
-      }
+      // Payable functions (accept NEAR tokens) - yellow
       if (method.stateMutability === 'payable') {
-        return "bg-yellow-500/10 text-yellow-500";
+        return "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20";
+      }
+      // Nonpayable functions (state-changing, no tokens) - orange
+      if (method.stateMutability === 'nonpayable') {
+        return "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20";
       }
       // Default for functions without stateMutability
-      return "bg-orange-500/10 text-orange-500";
+      return "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20";
     }
-    return "bg-gray-500/10 text-gray-500";
+    return "bg-gray-500/10 text-gray-500 hover:bg-gray-500/20";
   };
 
   return (

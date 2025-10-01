@@ -70,6 +70,7 @@ export interface Deployment {
 export interface ABIMethod {
   name: string;
   kind: 'view' | 'call';
+  modifiers?: string[];
   doc?: string;
   params?: {
     serialization_type: string;
@@ -82,6 +83,19 @@ export interface ABIMethod {
     serialization_type: string;
     type_schema: any;
   };
+  // Additional fields for UI rendering
+  type?: string;
+  stateMutability?: string;
+  inputs?: Array<{
+    name: string;
+    type: string;
+    internalType: string;
+  }>;
+  outputs?: Array<{
+    name: string;
+    type: string;
+    internalType: string;
+  }>;
 }
 
 export interface MethodCallResult {
