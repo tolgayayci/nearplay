@@ -243,19 +243,10 @@ export function ABIView({ projectId, isSharedView = false, onDeploy, onRequestDe
                       methods = selectedDeployment.abi;
                     } else if (selectedDeployment.abi?.body?.functions) {
                       methods = selectedDeployment.abi.body.functions;
-                      console.log('[ABI DEBUG] Found', methods.length, 'methods in NEAR ABI:', methods.map(m => m.name));
                     } else if (selectedDeployment.abi) {
                       // Try to extract from any object structure
                       methods = Object.values(selectedDeployment.abi).flat();
                     }
-
-                    console.log('[ABI DEBUG] Raw methods before conversion:', methods.map(m => ({
-                      name: m.name,
-                      kind: m.kind,
-                      modifiers: m.modifiers,
-                      hasParams: !!m.params,
-                      paramsStructure: m.params ? JSON.stringify(m.params, null, 2) : 'none'
-                    })));
 
                     // Filter out private and init methods (not callable externally)
                     methods = methods.filter((method: any) => {
@@ -270,9 +261,7 @@ export function ABIView({ projectId, isSharedView = false, onDeploy, onRequestDe
                       let outputs = method.outputs || [];
 
                       // Handle NEAR ABI params format
-                      console.log('[ABI DEBUG] Processing method:', method.name, 'params:', method.params, 'args:', method.args, 'inputs:', method.inputs);
                       if (method.params && method.params.args) {
-                        console.log('[ABI DEBUG] Method', method.name, 'has params.args:', method.params.args);
                         inputs = method.params.args.map((arg: any) => {
                           // Convert type_schema to simple type string
                           let type = 'string'; // default
@@ -343,8 +332,6 @@ export function ABIView({ projectId, isSharedView = false, onDeploy, onRequestDe
                             }
                           }
 
-                          console.log('[ABI DEBUG] Converting arg:', arg.name, 'schema:', arg.type_schema, 'result type:', type);
-
                           return {
                             name: arg.name,
                             type: type,
@@ -394,14 +381,6 @@ export function ABIView({ projectId, isSharedView = false, onDeploy, onRequestDe
                         outputs: outputs
                       };
                     });
-
-                    console.log('[ABI DEBUG] Converted methods:', methods.map(m => ({
-                      name: m.name,
-                      type: m.type,
-                      stateMutability: m.stateMutability,
-                      inputs: m.inputs?.length || 0,
-                      inputDetails: m.inputs?.map(i => `${i.name}: ${i.type}`) || []
-                    })));
 
                     // Calculate pagination for interface
                     const totalInterfacePages = Math.ceil(methods.length / interfaceItemsPerPage);
