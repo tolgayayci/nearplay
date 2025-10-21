@@ -42,6 +42,10 @@ export function TemplateListRow({ template, onUseTemplate, isCreating = false }:
         return 'text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-300 dark:bg-indigo-950/40 dark:border-indigo-800';
       case 'basic':
         return 'text-gray-700 bg-gray-50 border-gray-200 dark:text-gray-300 dark:bg-gray-950/40 dark:border-gray-800';
+      case 'challenge':
+        return 'text-purple-700 bg-purple-50 border-purple-200 dark:text-purple-300 dark:bg-purple-950/40 dark:border-purple-800';
+      case 'game':
+        return 'text-pink-700 bg-pink-50 border-pink-200 dark:text-pink-300 dark:bg-pink-950/40 dark:border-pink-800';
       default:
         return 'text-slate-700 bg-slate-50 border-slate-200 dark:text-slate-300 dark:bg-slate-950/40 dark:border-slate-800';
     }
@@ -98,6 +102,14 @@ export function TemplateListRow({ template, onUseTemplate, isCreating = false }:
                   className="text-xs px-2 py-0.5 border text-orange-800 bg-orange-50 border-orange-200 dark:text-orange-200 dark:bg-orange-950/60 dark:border-orange-700 font-medium"
                 >
                   ⚡ OpenZeppelin
+                </Badge>
+              )}
+              {template.isCommunity && (
+                <Badge
+                  variant="outline"
+                  className="text-xs px-2 py-0.5 border text-cyan-800 bg-cyan-50 border-cyan-200 dark:text-cyan-200 dark:bg-cyan-950/60 dark:border-cyan-700 font-medium"
+                >
+                  🌟 Community
                 </Badge>
               )}
             </div>

@@ -3,11 +3,13 @@ import {
   MessageCircle,
   Coins,
   Image,
-  Dices
+  Dices,
+  Target
 } from 'lucide-react';
 import { FUNGIBLE_TOKEN_CODE } from './fungible-token-template';
 import { NFT_CODE } from './nft-template';
 import { COIN_FLIP_CODE } from './coin-flip-template';
+import { CHALLENGE_ONE_CODE } from './challenge-one-template';
 
 const HELLO_WORLD_CODE = `// Find all our documentation at https://docs.near.org
 use near_sdk::{log, near};
@@ -217,6 +219,22 @@ export const PROJECT_TEMPLATES = [
       "UnorderedMap usage",
     ],
   },
+  {
+    name: "Challenge #1",
+    description: "Challenge how do you know NEAR SDK (attached_deposit, Timestamp). Send to us and have an opportunity to some NEARs",
+    icon: Target,
+    code: CHALLENGE_ONE_CODE,
+    category: "Challenge",
+    difficulty: "Beginner",
+    isCommunity: true,
+    features: [
+      "Payable functions",
+      "Attached deposit handling",
+      "Timestamp usage",
+      "Conditional bonus logic",
+      "State management",
+    ],
+  },
 ];
 
 export interface Template {
@@ -228,6 +246,7 @@ export interface Template {
   category: string;
   difficulty: string;
   features: string[];
+  isCommunity?: boolean;
   githubUrl?: string;
   documentation?: string;
   references?: Array<{
