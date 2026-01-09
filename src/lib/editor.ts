@@ -1,5 +1,119 @@
 import * as monaco from 'monaco-editor';
 
+// TOML language definition for Monaco
+const tomlLanguageDefinition: monaco.languages.IMonarchLanguage = {
+  tokenizer: {
+    root: [
+      // Comments
+      [/#.*$/, 'comment'],
+
+      // Section headers [section] or [section.subsection]
+      [/\[[^\]]*\]/, 'keyword'],
+
+      // Keys (before =)
+      [/^[a-zA-Z_][a-zA-Z0-9_-]*(?=\s*=)/, 'variable'],
+      [/[a-zA-Z_][a-zA-Z0-9_-]*(?=\s*=)/, 'variable'],
+
+      // Strings
+      [/"""/, 'string', '@multiLineString'],
+      [/"([^"\\]|\\.)*$/, 'string.invalid'],
+      [/"/, 'string', '@string'],
+      [/'[^']*'/, 'string'],
+
+      // Numbers
+      [/\b\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?/, 'number'], // dates
+      [/[+-]?\d+\.\d+([eE][+-]?\d+)?/, 'number.float'],
+      [/0x[0-9a-fA-F]+/, 'number.hex'],
+      [/0o[0-7]+/, 'number.octal'],
+      [/0b[01]+/, 'number.binary'],
+      [/[+-]?\d+/, 'number'],
+
+      // Booleans
+      [/\b(true|false)\b/, 'keyword.constant'],
+
+      // Operators
+      [/=/, 'operator'],
+
+      // Brackets
+      [/[{}\[\]]/, 'delimiter.bracket'],
+      [/[,]/, 'delimiter'],
+    ],
+    string: [
+      [/[^\\"]+/, 'string'],
+      [/\\./, 'string.escape'],
+      [/"/, 'string', '@pop'],
+    ],
+    multiLineString: [
+      [/[^"]+/, 'string'],
+      [/"""/, 'string', '@pop'],
+      [/"/, 'string'],
+    ],
+  },
+};
+
+// TOML language configuration
+const tomlLanguageConfig: monaco.languages.LanguageConfiguration = {
+  comments: {
+    lineComment: '#',
+  },
+  brackets: [
+    ['{', '}'],
+    ['[', ']'],
+  ],
+  autoClosingPairs: [
+    { open: '{', close: '}' },
+    { open: '[', close: ']' },
+    { open: '"', close: '"' },
+    { open: "'", close: "'" },
+  ],
+  surroundingPairs: [
+    { open: '{', close: '}' },
+    { open: '[', close: ']' },
+    { open: '"', close: '"' },
+    { open: "'", close: "'" },
+  ],
+};
+
+// Shell/Bash language definition
+const shellLanguageDefinition: monaco.languages.IMonarchLanguage = {
+  tokenizer: {
+    root: [
+      // Comments
+      [/#.*$/, 'comment'],
+
+      // Strings
+      [/"([^"\\]|\\.)*$/, 'string.invalid'],
+      [/"/, 'string', '@doubleString'],
+      [/'[^']*'/, 'string'],
+
+      // Keywords
+      [/\b(if|then|else|elif|fi|case|esac|for|while|do|done|in|function|return|exit|break|continue|export|local|readonly|declare|typeset|unset|shift|source)\b/, 'keyword'],
+
+      // Built-in commands
+      [/\b(echo|cd|pwd|ls|cat|grep|sed|awk|find|xargs|sort|uniq|wc|head|tail|cut|tr|mkdir|rm|cp|mv|chmod|chown|touch|test)\b/, 'keyword.other'],
+
+      // Variables
+      [/\$\{[^}]+\}/, 'variable'],
+      [/\$[a-zA-Z_][a-zA-Z0-9_]*/, 'variable'],
+      [/\$[0-9@#?$!-]/, 'variable'],
+
+      // Numbers
+      [/\b\d+\b/, 'number'],
+
+      // Operators
+      [/[|&;><]/, 'operator'],
+      [/[=!<>]=?/, 'operator'],
+    ],
+    doubleString: [
+      [/[^\\"$]+/, 'string'],
+      [/\\./, 'string.escape'],
+      [/\$\{[^}]+\}/, 'variable'],
+      [/\$[a-zA-Z_][a-zA-Z0-9_]*/, 'variable'],
+      [/"/, 'string', '@pop'],
+    ],
+  },
+};
+
 // Language configuration for Rust
 export const rustLanguageConfig: monaco.languages.LanguageConfiguration = {
   comments: {
@@ -31,10 +145,23 @@ export const rustLanguageConfig: monaco.languages.LanguageConfiguration = {
   },
 };
 
-// Initialize Monaco editor with Rust and NEAR SDK support
+// Initialize Monaco editor with Rust, TOML, and other language support
 export function initializeMonaco(monaco: typeof import('monaco-editor')) {
   // First, configure themes
   configureThemes(monaco);
+
+  // Register TOML language
+  if (!monaco.languages.getLanguages().some(lang => lang.id === 'toml')) {
+    monaco.languages.register({ id: 'toml', extensions: ['.toml'], aliases: ['TOML', 'toml'] });
+    monaco.languages.setLanguageConfiguration('toml', tomlLanguageConfig);
+    monaco.languages.setMonarchTokensProvider('toml', tomlLanguageDefinition);
+  }
+
+  // Register Shell/Bash language
+  if (!monaco.languages.getLanguages().some(lang => lang.id === 'shell')) {
+    monaco.languages.register({ id: 'shell', extensions: ['.sh', '.bash'], aliases: ['Shell', 'Bash', 'sh', 'bash'] });
+    monaco.languages.setMonarchTokensProvider('shell', shellLanguageDefinition);
+  }
 
   // Register Rust language if not already registered
   if (!monaco.languages.getLanguages().some(lang => lang.id === 'rust')) {

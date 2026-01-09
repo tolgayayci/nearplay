@@ -1,17 +1,29 @@
 use actix_cors::Cors;
-use actix_web::{middleware::Logger, web, App, HttpServer};
+use actix_web::{middleware::Logger, web, App, HttpServer, HttpRequest, HttpResponse, Error};
+use actix_web_actors::ws;
 use env_logger::Env;
 use log::{info, warn, error};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use std::env;
 
 mod handlers;
 mod models;
 mod services;
 mod utils;
+mod websocket;
 
-use handlers::{compile_handler, deploy_handler, health_handler, method_call_handler};
+use handlers::{
+    compile_handler, deploy_handler, health_handler, method_call_handler,
+    filesystem_tree_handler, filesystem_read_handler, filesystem_write_handler,
+    filesystem_create_handler, filesystem_delete_handler, filesystem_rename_handler,
+    filesystem_mkdir_handler, filesystem_move_handler, project_init_handler,
+    filesystem_search_handler,
+};
+use services::filesystem::FileSystemService;
+use services::terminal::TerminalService;
+use websocket::TerminalWsSession;
 
 async fn initialize_base_project() -> std::io::Result<()> {
     let base_project_path = Path::new("base_project");
@@ -60,6 +72,36 @@ async fn initialize_base_project() -> std::io::Result<()> {
     Ok(())
 }
 
+/// WebSocket handler for terminal connections
+async fn terminal_ws_handler(
+    req: HttpRequest,
+    stream: web::Payload,
+    terminal_service: web::Data<Arc<TerminalService>>,
+    query: web::Query<TerminalWsQuery>,
+) -> Result<HttpResponse, Error> {
+    let session_id = uuid::Uuid::new_v4().to_string();
+
+    info!(
+        "New terminal WebSocket connection: user={}, project={}",
+        query.user_id, query.project_id
+    );
+
+    let session = TerminalWsSession::new(
+        session_id,
+        query.user_id.clone(),
+        query.project_id.clone(),
+        terminal_service.get_ref().clone(),
+    );
+
+    ws::start(session, &req, stream)
+}
+
+#[derive(serde::Deserialize)]
+struct TerminalWsQuery {
+    user_id: String,
+    project_id: String,
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Load environment variables from .env file
@@ -79,7 +121,15 @@ async fn main() -> std::io::Result<()> {
 
     info!("Starting NEAR Playground Backend on {}", bind_address);
 
-    HttpServer::new(|| {
+    // Initialize FileSystemService
+    let projects_path = PathBuf::from("projects");
+    let base_project_path = PathBuf::from("base_project");
+    let fs_service = Arc::new(FileSystemService::new(projects_path.clone(), base_project_path));
+
+    // Initialize TerminalService
+    let terminal_service = Arc::new(TerminalService::new(projects_path));
+
+    HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
             .allow_any_method()
@@ -89,10 +139,27 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .wrap(Logger::default())
+            .app_data(web::Data::new(fs_service.clone()))
+            .app_data(web::Data::new(terminal_service.clone()))
+            // Existing routes
             .route("/health", web::get().to(health_handler))
             .route("/compile", web::post().to(compile_handler))
             .route("/deploy", web::post().to(deploy_handler))
             .route("/method-call", web::post().to(method_call_handler))
+            // Filesystem API routes
+            .route("/api/filesystem/tree", web::get().to(filesystem_tree_handler))
+            .route("/api/filesystem/read", web::post().to(filesystem_read_handler))
+            .route("/api/filesystem/write", web::post().to(filesystem_write_handler))
+            .route("/api/filesystem/create", web::post().to(filesystem_create_handler))
+            .route("/api/filesystem/delete", web::post().to(filesystem_delete_handler))
+            .route("/api/filesystem/rename", web::post().to(filesystem_rename_handler))
+            .route("/api/filesystem/mkdir", web::post().to(filesystem_mkdir_handler))
+            .route("/api/filesystem/move", web::post().to(filesystem_move_handler))
+            .route("/api/filesystem/search", web::post().to(filesystem_search_handler))
+            // Project initialization
+            .route("/api/project/initialize", web::post().to(project_init_handler))
+            // WebSocket terminal
+            .route("/ws/terminal", web::get().to(terminal_ws_handler))
     })
     .bind(&bind_address)?
     .run()

@@ -1,0 +1,67 @@
+# Build artifacts
+target/
+Cargo.lock
+
+# User projects (will be mounted as volume)
+projects/
+
+# Environment files (will be mounted separately)
+.env
+.env.local
+.env.production
+.env.development
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+README.md
+docs/
+*.md
+
+# Docker files
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+traefik-docker-compose.yml
+.dockerignore
+
+# Logs
+*.log
+logs/
+
+# SSL certificates
+letsencrypt/
+*.pem
+*.key
+*.crt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Test files
+tests/
+test/
+*.test
+*.spec
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml

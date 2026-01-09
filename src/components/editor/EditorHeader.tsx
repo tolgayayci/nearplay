@@ -29,9 +29,9 @@ export function EditorHeader({
           <Code2 className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h3 className="font-medium">Contract Editor</h3>
+          <h3 className="font-medium">Editor</h3>
           <p className="text-xs text-muted-foreground">
-            {isSharedView ? "View-only contract code" : "Write your NEAR smart contract"}
+            {isSharedView ? "View-only mode" : "Write and manage your project files"}
           </p>
         </div>
       </div>

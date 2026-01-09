@@ -20,6 +20,7 @@ import { NewProjectDialog } from '@/components/projects/NewProjectDialog';
 import { cn } from '@/lib/utils';
 import { SEO } from '@/components/seo/SEO';
 import { Badge } from '@/components/ui/badge';
+import { initializeProject } from '@/lib/api';
 
 export function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -107,9 +108,9 @@ export function ProjectsPage() {
     }
   };
 
-  const handleCreateProject = async (data: { 
-    name: string; 
-    description: string; 
+  const handleCreateProject = async (data: {
+    name: string;
+    description: string;
     template?: typeof PROJECT_TEMPLATES[0];
   }) => {
     if (!user) {
@@ -120,8 +121,9 @@ export function ProjectsPage() {
       });
       return;
     }
-    
+
     try {
+      const templateCode = data.template?.code || '';
 
       // Create project with empty code if no template is provided
       const { data: project, error } = await supabase
@@ -130,7 +132,7 @@ export function ProjectsPage() {
           user_id: user.id,
           name: data.name,
           description: data.description || '',
-          code: data.template?.code || '', // Empty string if no template
+          code: templateCode,
           updated_at: new Date().toISOString(),
           last_activity_at: new Date().toISOString(),
         })
@@ -138,6 +140,15 @@ export function ProjectsPage() {
         .single();
 
       if (error) throw error;
+
+      // Initialize the project filesystem with template code
+      try {
+        await initializeProject(user.id, project.id, templateCode || undefined);
+      } catch (initError) {
+        console.error('Failed to initialize project filesystem:', initError);
+        // Don't fail the whole operation if filesystem init fails
+        // The editor will try to initialize it when opened
+      }
 
       toast({
         title: "Success",

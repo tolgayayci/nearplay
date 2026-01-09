@@ -65,27 +65,40 @@ pub async fn compile_contract(
 
 fn setup_user_project(base_project_path: &PathBuf, project_path: &PathBuf, code: &str) -> Result<()> {
     // Check if user project already exists
-    if !project_path.exists() {
+    let is_new_project = !project_path.exists();
+
+    if is_new_project {
         info!("Creating new project by copying base project template");
-        
+
         // Create parent directory
         if let Some(parent) = project_path.parent() {
             fs::create_dir_all(parent).context("Failed to create user projects directory")?;
         }
-        
+
         // Copy entire base project
         copy_dir_all(base_project_path, project_path)
             .context("Failed to copy base project template")?;
-        
+
         debug!("Base project copied to: {:?}", project_path);
     }
-    
-    // Always update lib.rs with user's code
+
+    // Only write lib.rs if:
+    // 1. It's a new project and we have code to write, OR
+    // 2. Code is explicitly provided (not empty) - for backwards compatibility
+    // This preserves filesystem edits when compiling with the multi-file editor
     let lib_rs_path = project_path.join("src").join("lib.rs");
-    fs::write(&lib_rs_path, code)
-        .context("Failed to write user contract code")?;
-    
-    debug!("Updated lib.rs with user code");
+    if is_new_project && !code.is_empty() {
+        fs::write(&lib_rs_path, code)
+            .context("Failed to write user contract code")?;
+        debug!("Updated lib.rs with user code for new project");
+    } else if !is_new_project && !code.is_empty() {
+        // Only update if code is provided - this maintains backwards compatibility
+        // but allows the multi-file editor to work by passing empty code
+        debug!("Using existing lib.rs from filesystem (code provided but project exists)");
+    } else {
+        debug!("Using existing lib.rs from filesystem");
+    }
+
     Ok(())
 }
 

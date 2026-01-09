@@ -1,16 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
 import MonacoEditor from "@monaco-editor/react";
 import { EditorHeader } from './editor/EditorHeader';
+import { FileTabs } from './editor/FileTabs';
 import { DeployDialog } from './editor/DeployDialog';
 import { useTheme } from 'next-themes';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { FileCode2 } from 'lucide-react';
-import { 
-  initializeMonaco, 
-  defineEditorTheme, 
-  defaultEditorOptions 
+import {
+  initializeMonaco,
+  defineEditorTheme,
+  defaultEditorOptions
 } from '@/lib/editor';
+import { CompilationResult, OpenFile } from '@/lib/types';
 
 interface EditorProps {
   value: string;
@@ -24,6 +26,15 @@ interface EditorProps {
   onSave?: () => void;
   isSharedView?: boolean;
   onRequestDeploy?: () => void;
+  language?: string;
+  filePath?: string;
+  showHeader?: boolean;
+  // Multi-file tab props
+  openFiles?: OpenFile[];
+  activeFilePath?: string | null;
+  onSelectFile?: (path: string) => void;
+  onCloseFile?: (path: string) => void;
+  onCloseAllFiles?: () => void;
 }
 
 export function Editor({
@@ -38,6 +49,14 @@ export function Editor({
   onSave,
   isSharedView = false,
   onRequestDeploy,
+  language = 'rust',
+  filePath,
+  showHeader = true,
+  openFiles,
+  activeFilePath,
+  onSelectFile,
+  onCloseFile,
+  onCloseAllFiles,
 }: EditorProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [showDeployDialog, setShowDeployDialog] = useState(false);
@@ -157,21 +176,33 @@ export function Editor({
 
   return (
     <div className="h-full flex flex-col bg-background border rounded-md overflow-hidden">
-      <EditorHeader
-        onCompile={onCompile || (() => {})}
-        onDeploy={handleDeployClick}
-        onSave={handleSave}
-        isCompiling={isCompiling || false}
-        isSaving={isSaving}
-        hasSuccessfulCompilation={lastCompilation?.success}
-        isSharedView={isSharedView}
-      />
+      {showHeader && (
+        <EditorHeader
+          onCompile={onCompile || (() => {})}
+          onDeploy={handleDeployClick}
+          onSave={handleSave}
+          isCompiling={isCompiling || false}
+          isSaving={isSaving}
+          hasSuccessfulCompilation={lastCompilation?.success}
+          isSharedView={isSharedView}
+        />
+      )}
+      {openFiles && openFiles.length > 0 && onSelectFile && onCloseFile && (
+        <FileTabs
+          openFiles={openFiles}
+          activeFilePath={activeFilePath || null}
+          onSelectFile={onSelectFile}
+          onCloseFile={onCloseFile}
+          onCloseAllFiles={onCloseAllFiles}
+        />
+      )}
       <div className="flex-1 min-h-0 relative">
         <MonacoEditor
           height="100%"
-          defaultLanguage="rust"
+          language={language}
           value={value}
           onChange={(value) => onChange(value || '')}
+          path={filePath}
           options={{
             ...defaultEditorOptions,
             readOnly: readOnly || isCompiling || isSharedView,
@@ -190,7 +221,7 @@ export function Editor({
                     Initializing development environment
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    with Rust language support
+                    with {language === 'rust' ? 'Rust' : language} support
                   </p>
                 </div>
               </div>

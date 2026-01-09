@@ -45,14 +45,3 @@ temp/
 tmp/
 
 update-traefik.sh
-build-and-deploy.sh
-.env.example
-base_project
-
-Dockerfile
-Dockerfile.light
-docker-compose.yml
-docker-compose.prod.yml
-traefik-docker-compose.yml
-.traefik/
-.dockerignore

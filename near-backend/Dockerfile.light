@@ -1,0 +1,77 @@
+# Lightweight Dockerfile - assumes cargo-near is installed on host
+# Stage 1: Builder
+FROM rust:1.88.0 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy Cargo files first for dependency caching
+COPY Cargo.toml ./
+# Copy Cargo.lock if it exists
+COPY Cargo.loc[k] ./
+
+# Create a dummy main.rs to build dependencies
+RUN mkdir src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build --release && \
+    rm -rf src
+
+# Copy the actual source code
+COPY src ./src
+
+# Build the actual application
+RUN touch src/main.rs && \
+    cargo build --release
+
+# Stage 2: Runtime (MINIMAL)
+FROM debian:bookworm-slim
+
+# Install only essential runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r nearplay && useradd -r -g nearplay -m -d /home/nearplay nearplay
+
+WORKDIR /app
+
+# Copy built application from builder
+COPY --from=builder /app/target/release/near-playground-backend /app/near-playground-backend
+
+# Copy base_project template from host (will be mounted as volume)
+# This way we can update base_project without rebuilding
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/projects && \
+    mkdir -p /app/base_project && \
+    chown -R nearplay:nearplay /app && \
+    chmod -R 755 /app/projects
+
+# Environment variables
+ENV RUST_LOG=info
+ENV HOST=0.0.0.0
+ENV PORT=8080
+
+# Expose port
+EXPOSE 8080
+
+# Switch to non-root user
+USER nearplay
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Run the application
+CMD ["/app/near-playground-backend"]

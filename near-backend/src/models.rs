@@ -92,6 +92,90 @@ pub struct HealthResponse {
     pub version: String,
 }
 
+// Filesystem API models
+#[derive(Debug, Deserialize)]
+pub struct FileTreeRequest {
+    pub user_id: String,
+    pub project_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileReadRequest {
+    pub user_id: String,
+    pub project_id: String,
+    pub path: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileWriteRequest {
+    pub user_id: String,
+    pub project_id: String,
+    pub path: String,
+    pub content: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileCreateRequest {
+    pub user_id: String,
+    pub project_id: String,
+    pub path: String,
+    #[serde(default)]
+    pub is_directory: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileDeleteRequest {
+    pub user_id: String,
+    pub project_id: String,
+    pub path: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileRenameRequest {
+    pub user_id: String,
+    pub project_id: String,
+    pub old_path: String,
+    pub new_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileMoveRequest {
+    pub user_id: String,
+    pub project_id: String,
+    pub source_path: String,
+    pub destination_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileSearchRequest {
+    pub user_id: String,
+    pub project_id: String,
+    pub query: String,
+    pub search_content: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FileSearchResult {
+    pub path: String,
+    pub name: String,
+    pub preview: Option<String>,
+    pub line_number: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FileSearchResponse {
+    pub results: Vec<FileSearchResult>,
+    pub total_matches: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProjectInitRequest {
+    pub user_id: String,
+    pub project_id: String,
+    pub template: Option<String>,
+    pub code: Option<String>,
+}
+
 impl<T> ApiResponse<T> {
     pub fn success(data: T, message: String) -> Self {
         Self {

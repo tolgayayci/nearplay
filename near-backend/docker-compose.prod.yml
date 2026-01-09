@@ -1,0 +1,96 @@
+services:
+  near-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: near-playground-backend
+    restart: unless-stopped
+    expose:
+      - "8080"
+    volumes:
+      # Persistent storage for user projects
+      - near-projects:/app/projects
+      # Cargo cache for faster builds
+      - cargo-cache:/home/nearplay/.cargo
+      # Rustup installations
+      - rustup-cache:/home/nearplay/.rustup
+      # NEAR credentials
+      - near-credentials:/home/nearplay/.near-credentials
+      # Logs
+      - ./logs:/var/log/near-playground
+      # Environment file
+      - ./.env.production:/app/.env:ro
+    env_file:
+      - .env.production
+    environment:
+      # Server configuration
+      - RUST_LOG=${RUST_LOG:-info}
+      - HOST=0.0.0.0
+      - PORT=8080
+
+      # Domain configuration
+      - DOMAIN=api.nearplay.app
+      - EMAIL=tolga@yk-labs.com
+
+      # NEAR configuration
+      - NEAR_NETWORK=${NEAR_NETWORK:-testnet}
+      - NEAR_NODE_URL=${NEAR_NODE_URL:-https://rpc.testnet.near.org}
+      - NEAR_ACCOUNT_ID=${NEAR_ACCOUNT_ID}
+      - NEAR_PRIVATE_KEY=${NEAR_PRIVATE_KEY}
+
+      # Compiler paths
+      - CARGO_HOME=/home/nearplay/.cargo
+      - RUSTUP_HOME=/home/nearplay/.rustup
+      - PATH=/home/nearplay/.cargo/bin:${PATH}
+
+      # Rate limiting
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
+    networks:
+      # Only use the proxy network - no internal network needed if not connecting to other services
+      - proxy
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+
+      # Router for api.nearplay.app
+      - "traefik.http.routers.near-api.rule=Host(`api.nearplay.app`)"
+      - "traefik.http.routers.near-api.entrypoints=websecure"
+      - "traefik.http.routers.near-api.tls=true"
+      - "traefik.http.routers.near-api.tls.certresolver=letsencrypt"
+
+      # Service configuration
+      - "traefik.http.services.near-api.loadbalancer.server.port=8080"
+
+      # CORS middleware configuration
+      - "traefik.http.middlewares.near-cors.headers.accesscontrolallowmethods=GET,OPTIONS,PUT,POST,DELETE"
+      - "traefik.http.middlewares.near-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.near-cors.headers.accesscontrolalloworiginlist=https://nearplay.app,http://localhost:5173,http://localhost:3000"
+      - "traefik.http.middlewares.near-cors.headers.accesscontrolmaxage=100"
+      - "traefik.http.middlewares.near-cors.headers.addvaryheader=true"
+      - "traefik.http.routers.near-api.middlewares=near-cors"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
+
+networks:
+  # Use the existing external proxy network
+  proxy:
+    external: true
+
+# Volumes for persistent data
+volumes:
+  near-projects:
+    driver: local
+  cargo-cache:
+    driver: local
+  rustup-cache:
+    driver: local
+  near-credentials:
+    driver: local
+  logs:
+    driver: local

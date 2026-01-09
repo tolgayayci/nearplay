@@ -52,3 +52,11 @@ CLAUDE.md
 .claude
 
 supabase
+
+# Near Backend
+near-backend/target/
+near-backend/base_project/target/
+near-backend/projects/
+near-backend/.env
+near-backend/.env.local
+near-backend/.env.production

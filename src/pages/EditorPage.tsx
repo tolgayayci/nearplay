@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   FileCode2,
-  Terminal,
   PlayCircle,
+  PlayIcon,
   Wand2,
   Clock,
   Calendar,
@@ -12,29 +12,48 @@ import {
   X,
   Share2,
   Bug,
+  RocketIcon,
+  Loader2,
+  FolderTree,
+  Terminal as TerminalIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Editor } from "@/components/Editor";
 import { useToast } from "@/hooks/use-toast";
-import { Project, CompilationResult } from "@/lib/types";
+import { Project, CompilationResult, FileNode } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 import { compileContract } from "@/lib/api";
 import { useAuth } from "@/App";
 import { UserNav } from "@/components/UserNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { CompilerView } from "@/components/views/CompilerView";
 import { ABIView } from "@/components/views/ABIView";
 import { cn } from "@/lib/utils";
 import { SEO } from "@/components/seo/SEO";
 import { ShareProjectDialog } from "@/components/ShareProjectDialog";
 import { DeployDialog } from "@/components/editor/DeployDialog";
 import { Badge } from "@/components/ui/badge";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import { FileExplorer, FileExplorerRef } from "@/components/explorer/FileExplorer";
+import { useProjectFiles } from "@/hooks/useProjectFiles";
+import { Terminal } from "@/components/terminal/Terminal";
+import { PackageManagerModal } from "@/components/packages/PackageManagerModal";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const VIEWS = [
-  { id: "editor", title: "Editor", icon: FileCode2 },
-  { id: "abi", title: "Contract Interface", icon: PlayCircle },
-  { id: "console", title: "Console", icon: Terminal },
+  { id: "files", title: "Files", icon: FolderTree, position: "left" },
+  { id: "editor", title: "Editor", icon: FileCode2, position: "center" },
+  { id: "abi", title: "Contract Interface", icon: PlayCircle, position: "center" },
+  { id: "terminal", title: "Terminal", icon: TerminalIcon, position: "right" },
 ] as const;
 
 type ViewId = (typeof VIEWS)[number]["id"];
@@ -43,9 +62,10 @@ export function EditorPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [isCompiling, setIsCompiling] = useState(false);
   const [activeViews, setActiveViews] = useState<ViewId[]>([
+    "files",
     "editor",
     "abi",
-    "console",
+    "terminal",
   ]);
   const [lastCompilationResult, setLastCompilationResult] =
     useState<CompilationResult | null>(null);
@@ -56,11 +76,40 @@ export function EditorPage() {
   const [refreshABITrigger, setRefreshABITrigger] = useState(0);
   const [showDeployDialog, setShowDeployDialog] = useState(false);
   const [showABIError, setShowABIError] = useState(false);
+  const [terminalOutput, setTerminalOutput] = useState<string>("");
+  const [showPackageModal, setShowPackageModal] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const fileExplorerRef = useRef<FileExplorerRef>(null);
+  const hasAutoOpenedRef = useRef(false);
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+
+  // Multi-file management hook
+  const {
+    fileTree,
+    openFiles,
+    activeFilePath,
+    openFile,
+    reloadFile,
+    closeFile,
+    closeAllFiles,
+    setActiveFile,
+    updateFileContent,
+    saveFile,
+    saveAllFiles,
+    getActiveFile,
+    hasUnsavedChanges,
+    loadFileTree,
+  } = useProjectFiles({
+    userId: user?.id || "",
+    projectId: id || "",
+    initialCode: project?.code, // Pass database code for old project migration
+  });
+
+  // Get active file for editor
+  const activeFile = getActiveFile();
 
   // Subscribe to project changes
   useEffect(() => {
@@ -140,6 +189,53 @@ export function EditorPage() {
     fetchProject();
   }, [id, navigate, toast]);
 
+  // Load file tree when project loads
+  useEffect(() => {
+    if (project && user) {
+      loadFileTree();
+    }
+  }, [project, user, loadFileTree]);
+
+  // Auto-open src/lib.rs or first .rs file when file tree loads (only on initial load)
+  useEffect(() => {
+    // Only auto-open once on initial load
+    if (fileTree && openFiles.length === 0 && !hasAutoOpenedRef.current) {
+      hasAutoOpenedRef.current = true;
+
+      // Helper to find src/lib.rs or first .rs file in src
+      const findDefaultFile = (node: FileNode): string | null => {
+        if (!node.children) return null;
+
+        // First pass: look for src/lib.rs specifically
+        for (const child of node.children) {
+          if (child.path === 'src/lib.rs' && !child.is_directory) {
+            return child.path;
+          }
+          // Look in src folder
+          if (child.name === 'src' && child.is_directory && child.children) {
+            const libRs = child.children.find(f => f.name === 'lib.rs' && !f.is_directory);
+            if (libRs) return libRs.path;
+          }
+        }
+
+        // Second pass: look for any .rs file in src
+        for (const child of node.children) {
+          if (child.name === 'src' && child.is_directory && child.children) {
+            const rsFile = child.children.find(f => f.name.endsWith('.rs') && !f.is_directory);
+            if (rsFile) return rsFile.path;
+          }
+        }
+
+        return null;
+      };
+
+      const defaultFile = findDefaultFile(fileTree);
+      if (defaultFile) {
+        openFile(defaultFile);
+      }
+    }
+  }, [fileTree, openFiles.length, openFile]);
+
   useEffect(() => {
     if (isEditingName && nameInputRef.current) {
       nameInputRef.current.focus();
@@ -208,64 +304,62 @@ export function EditorPage() {
     }
   };
 
-  const handleSave = async () => {
-    if (!project) return;
+  const handleSave = useCallback(async () => {
+    if (!activeFilePath) return;
 
-    // Fetch the latest project data to update the UI
     try {
-      const { data: updatedProject, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", project.id)
-        .single();
-
-      if (error) throw error;
-      if (!updatedProject) throw new Error("Project not found");
-
-      setProject(updatedProject);
+      await saveFile(activeFilePath);
+      toast({
+        title: "Saved",
+        description: "File saved successfully",
+      });
     } catch (error) {
-      console.error("Error fetching updated project:", error);
-    }
-  };
-
-  const handleCompile = async () => {
-    if (!project || isCompiling) return;
-
-    // First save the current code
-    try {
-      const { error: saveError } = await supabase
-        .from("projects")
-        .update({
-          code: project.code,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", project.id);
-
-      if (saveError) throw saveError;
-    } catch (error) {
-      console.error("Error saving code:", error);
+      console.error("Error saving file:", error);
       toast({
         title: "Error",
-        description: "Failed to save code before compilation",
+        description: "Failed to save file",
         variant: "destructive",
       });
-      return;
     }
+  }, [activeFilePath, saveFile, toast]);
 
-    if (!user) {
-      console.error("EditorPage: No user found during compilation");
+  const handleCompile = async () => {
+    if (!project || isCompiling || !user) return;
+
+    // Save all open files before compiling
+    try {
+      if (hasUnsavedChanges()) {
+        await saveAllFiles();
+      }
+    } catch (error) {
+      console.error("Error saving files before compilation:", error);
       toast({
         title: "Error",
-        description: "You must be logged in to compile",
+        description: "Failed to save files before compilation",
         variant: "destructive",
       });
       return;
     }
 
     setIsCompiling(true);
+    // Add compilation start message to terminal
+    const startTime = new Date().toLocaleTimeString();
+    setTerminalOutput(prev => prev + `\n$ cargo near build non-reproducible-wasm\n[${startTime}] Starting compilation...\n`);
+
     try {
-      const result = await compileContract(project.code, user.id, project.id);
+      // Get the main lib.rs content for compilation
+      const mainFile = openFiles.find(f => f.path === "src/lib.rs");
+      const codeToCompile = mainFile?.content || project.code;
+
+      const result = await compileContract(codeToCompile, user.id, project.id);
       setLastCompilationResult(result);
+
+      // Append compilation output to terminal
+      const endTime = new Date().toLocaleTimeString();
+      const output = result.success
+        ? `[${endTime}] Compilation successful!\n${result.stdout || ''}\n`
+        : `[${endTime}] Compilation failed.\n${result.stderr || result.stdout || ''}\n`;
+      setTerminalOutput(prev => prev + output);
 
       // Save compilation result to history
       const { error: historyError } = await supabase
@@ -273,7 +367,7 @@ export function EditorPage() {
         .insert({
           project_id: project.id,
           user_id: user.id,
-          code_snapshot: project.code,
+          code_snapshot: codeToCompile,
           result: {
             stdout: result.stdout,
             stderr: result.stderr,
@@ -418,6 +512,16 @@ export function EditorPage() {
     );
   };
 
+  const handleFileSelect = useCallback(async (path: string) => {
+    await openFile(path);
+  }, [openFile]);
+
+  const handleEditorChange = useCallback((value: string) => {
+    if (activeFilePath) {
+      updateFileContent(activeFilePath, value);
+    }
+  }, [activeFilePath, updateFileContent]);
+
   if (!project) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
@@ -429,11 +533,10 @@ export function EditorPage() {
     );
   }
 
-  const hasConsole = activeViews.includes("console");
+  const hasFiles = activeViews.includes("files");
   const hasEditor = activeViews.includes("editor");
   const hasABI = activeViews.includes("abi");
-  const mainHeight = hasConsole ? "h-[75%]" : "h-full";
-  const consoleHeight = "h-[25%]";
+  const hasTerminal = activeViews.includes("terminal");
 
   const getMainPanelWidth = () => {
     const activeMainViews = [hasEditor, hasABI].filter(Boolean).length;
@@ -442,6 +545,7 @@ export function EditorPage() {
   };
 
   return (
+    <TooltipProvider>
     <div className="h-screen flex flex-col bg-background">
       <SEO
         title={project?.name || "Editor"}
@@ -623,56 +727,175 @@ export function EditorPage() {
               showABIError={showABIError}
             />
           )}
+
+          {user && (
+            <PackageManagerModal
+              open={showPackageModal}
+              onOpenChange={setShowPackageModal}
+              userId={user.id}
+              projectId={project.id}
+              onDependenciesChanged={() => {
+                fileExplorerRef.current?.refresh();
+                // Reload Cargo.toml if it's open in the editor
+                reloadFile('Cargo.toml');
+              }}
+            />
+          )}
         </>
       )}
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className={cn("flex", mainHeight)}>
-          {hasEditor && (
-            <div
-              style={{ width: getMainPanelWidth() }}
-              className="h-full overflow-hidden p-2"
-            >
-              <Editor
-                value={project.code}
-                onChange={(code) =>
-                  setProject((prev) => (prev ? { ...prev, code } : null))
-                }
-                onCompile={handleCompile}
-                isCompiling={isCompiling}
-                projectId={project.id}
-                lastCompilation={lastCompilationResult}
-                onDeploySuccess={handleDeploySuccess}
-                onSave={handleSave}
-                onRequestDeploy={handleRequestDeploy}
-              />
+        <ResizablePanelGroup direction="vertical">
+          {/* Main content area */}
+          <ResizablePanel defaultSize={hasTerminal ? 75 : 100} minSize={30}>
+            <div className="h-full flex">
+              {/* File Explorer - fixed width, toggleable */}
+              {hasFiles && user && id && (
+                <div className="w-[280px] h-full p-2 shrink-0">
+                  <FileExplorer
+                    ref={fileExplorerRef}
+                    userId={user.id}
+                    projectId={id}
+                    projectName={project.name}
+                    onFileSelect={handleFileSelect}
+                    selectedFile={activeFilePath}
+                    onOpenPackageManager={() => setShowPackageModal(true)}
+                    className="h-full"
+                  />
+                </div>
+              )}
+
+              {/* Editor and ABI panels */}
+              <div className="flex-1 min-w-0">
+                <div className="h-full flex">
+                  {hasEditor && (
+                    <div
+                      style={{ width: getMainPanelWidth() }}
+                      className="h-full overflow-hidden p-2"
+                    >
+                      {activeFile ? (
+                        <Editor
+                          value={activeFile.content}
+                          onChange={handleEditorChange}
+                          onCompile={handleCompile}
+                          isCompiling={isCompiling}
+                          projectId={project.id}
+                          lastCompilation={lastCompilationResult}
+                          onDeploySuccess={handleDeploySuccess}
+                          onSave={handleSave}
+                          onRequestDeploy={handleRequestDeploy}
+                          language={activeFile.language}
+                          filePath={activeFile.path}
+                          openFiles={openFiles}
+                          activeFilePath={activeFilePath}
+                          onSelectFile={setActiveFile}
+                          onCloseFile={closeFile}
+                          onCloseAllFiles={closeAllFiles}
+                        />
+                      ) : (
+                        <div className="h-full flex flex-col bg-background border rounded-md overflow-hidden">
+                          {/* Header - matches Editor with file selected */}
+                          <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/40">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-primary/10 rounded-md">
+                                <FileCode2 className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <h3 className="font-medium">Editor</h3>
+                                <p className="text-xs text-muted-foreground">
+                                  Write and manage your project files
+                                </p>
+                              </div>
+                            </div>
+                            {/* Action buttons */}
+                            <div className="flex items-center gap-2">
+                              <Button
+                                onClick={handleCompile}
+                                disabled={isCompiling}
+                                variant="default"
+                                size="sm"
+                                className="gap-2 min-w-[90px]"
+                              >
+                                {isCompiling ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <PlayIcon className="h-4 w-4" />
+                                )}
+                                {isCompiling ? "Compiling..." : "Compile"}
+                              </Button>
+                              <Button
+                                onClick={handleRequestDeploy}
+                                variant="outline"
+                                size="sm"
+                                className={`gap-2 min-w-[90px] ${lastCompilationResult?.success ? "bg-primary/10 text-primary hover:bg-primary/20" : ""}`}
+                                disabled={!lastCompilationResult?.success}
+                                title={!lastCompilationResult?.success ? "Compile your contract successfully before deploying" : undefined}
+                              >
+                                <RocketIcon className="h-4 w-4" />
+                                Deploy
+                              </Button>
+                            </div>
+                          </div>
+                          {/* Empty state content */}
+                          <div className="flex-1 flex items-center justify-center bg-muted/40">
+                            <div className="text-center">
+                              <div className="inline-flex p-3 bg-primary/10 rounded-lg mb-6">
+                                <FileCode2 className="h-6 w-6 text-primary" />
+                              </div>
+                              <h3 className="font-medium mb-3">No File Selected</h3>
+                              <div className="space-y-1">
+                                <p className="text-sm text-muted-foreground">
+                                  Select a file from the explorer
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  to start editing your smart contract
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {hasABI && (
+                    <div
+                      style={{ width: getMainPanelWidth() }}
+                      className="h-full overflow-hidden p-2"
+                    >
+                      <ABIView
+                        projectId={project.id}
+                        refreshTrigger={refreshABITrigger}
+                        onRequestDeploy={handleRequestDeploy}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
+          </ResizablePanel>
+
+          {/* Terminal panel - toggleable */}
+          {hasTerminal && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={25} minSize={10} maxSize={50}>
+                <div className="h-full flex flex-col overflow-hidden p-2">
+                  {user && id && (
+                    <Terminal
+                      userId={user.id}
+                      projectId={id}
+                      compilationOutput={terminalOutput}
+                    />
+                  )}
+                </div>
+              </ResizablePanel>
+            </>
           )}
 
-          {hasABI && (
-            <div
-              style={{ width: getMainPanelWidth() }}
-              className="h-full overflow-hidden p-2"
-            >
-              <ABIView
-                projectId={project.id}
-                refreshTrigger={refreshABITrigger}
-                onRequestDeploy={handleRequestDeploy}
-              />
-            </div>
-          )}
-        </div>
-
-        {hasConsole && (
-          <div className={cn("border-t overflow-hidden p-2", consoleHeight)}>
-            <CompilerView
-              result={lastCompilationResult}
-              isCompiling={isCompiling}
-              projectId={project.id}
-            />
-          </div>
-        )}
+        </ResizablePanelGroup>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

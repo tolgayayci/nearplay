@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      # Entry points configuration
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+
+      # Docker provider
+      - --providers.docker=true
+      - --providers.docker.network=proxy
+      - --providers.docker.exposedbydefault=false
+
+      # Let's Encrypt configuration for SSL
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.email=tolga@yk-labs.com
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      # Use staging server for testing (remove for production)
+      # - --certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+
+      # API and Dashboard (optional, remove in production)
+      - --api.dashboard=true
+      - --api.insecure=false
+
+      # Logging
+      - --log.level=INFO
+      - --accesslog=true
+    ports:
+      - "80:80"
+      - "443:443"
+      # Dashboard port (optional, remove in production)
+      # - "8080:8080"
+    volumes:
+      # Docker socket for service discovery
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Let's Encrypt certificates storage
+      - ./letsencrypt:/letsencrypt
+      # Traefik configuration (optional)
+      # - ./traefik.yml:/etc/traefik/traefik.yml:ro
+    networks:
+      - proxy
+    labels:
+      # Dashboard configuration (optional, secure with auth in production)
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(\`traefik.nearplay.app\`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
+      # Basic auth for dashboard (generate with: htpasswd -nb admin password)
+      # - "traefik.http.routers.traefik.middlewares=auth"
+      # - "traefik.http.middlewares.auth.basicauth.users=admin:$$2y$$10$$..."
+
+networks:
+  proxy:
+    external: true
