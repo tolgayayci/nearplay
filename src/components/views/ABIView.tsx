@@ -22,13 +22,14 @@ import { History, PlayCircle, Rocket } from 'lucide-react';
 
 interface ABIViewProps {
   projectId: string;
+  userId?: string;
   isSharedView?: boolean;
   onDeploy?: () => void;
   onRequestDeploy?: () => void;
   refreshTrigger?: number;
 }
 
-export function ABIView({ projectId, isSharedView = false, onDeploy, onRequestDeploy, refreshTrigger }: ABIViewProps) {
+export function ABIView({ projectId, userId, isSharedView = false, onDeploy, onRequestDeploy, refreshTrigger }: ABIViewProps) {
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [selectedDeployment, setSelectedDeployment] = useState<Deployment | null>(null);
   const [isContractVerified, setIsContractVerified] = useState(false);
@@ -198,6 +199,9 @@ export function ABIView({ projectId, isSharedView = false, onDeploy, onRequestDe
         error={error}
         deployments={deployments}
         isLoading={isLoading}
+        userId={userId}
+        projectId={projectId}
+        isSharedView={isSharedView}
       />
 
       {activeView === 'interface' ? (

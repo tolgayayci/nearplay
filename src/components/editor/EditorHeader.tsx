@@ -1,21 +1,23 @@
 import { Button } from '@/components/ui/button';
-import { PlayIcon, RocketIcon, Loader2, Save, Code2 } from 'lucide-react';
+import { PlayIcon, RocketIcon, Loader2, Save, Code2, FlaskConical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface EditorHeaderProps {
   onCompile: () => void;
   onDeploy: () => void;
   onSave: () => void;
+  onOpenTests: () => void;
   isCompiling: boolean;
   isSaving: boolean;
   hasSuccessfulCompilation?: boolean;
   isSharedView?: boolean;
 }
 
-export function EditorHeader({ 
-  onCompile, 
-  onDeploy, 
+export function EditorHeader({
+  onCompile,
+  onDeploy,
   onSave,
+  onOpenTests,
   isCompiling,
   isSaving,
   hasSuccessfulCompilation = false,
@@ -51,6 +53,17 @@ export function EditorHeader({
             <Save className="h-4 w-4" />
           )}
           {isSaving ? "Saving..." : "Save"}
+        </Button>
+
+        <Button
+          onClick={onOpenTests}
+          disabled={isSharedView}
+          variant="outline"
+          size="sm"
+          className="gap-2 min-w-[90px]"
+        >
+          <FlaskConical className="h-4 w-4" />
+          Tests
         </Button>
 
         <Button

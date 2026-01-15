@@ -1,12 +1,13 @@
-import { ArrowUpRight, Blocks } from 'lucide-react';
+import { ArrowUpRight, Blocks, Github } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ProjectHeaderProps {
   onNewProject: () => void;
+  onImportFromGitHub?: () => void;
 }
 
-export function ProjectHeader({ onNewProject }: ProjectHeaderProps) {
+export function ProjectHeader({ onNewProject, onImportFromGitHub }: ProjectHeaderProps) {
   return (
     <div className="flex items-center justify-between">
       <div className="space-y-4">
@@ -18,17 +19,25 @@ export function ProjectHeader({ onNewProject }: ProjectHeaderProps) {
             <Blocks className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Smart Contracts</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">My Workspace</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Build and deploy your NEAR contracts with confidence
+              Manage your projects, deployments, and templates
             </p>
           </div>
         </div>
       </div>
-      <Button onClick={onNewProject} className="gap-2">
-        <ArrowUpRight className="h-4 w-4" />
-        New Project
-      </Button>
+      <div className="flex items-center gap-2">
+        {onImportFromGitHub && (
+          <Button variant="outline" onClick={onImportFromGitHub} className="gap-2">
+            <Github className="h-4 w-4" />
+            Import from GitHub
+          </Button>
+        )}
+        <Button onClick={onNewProject} className="gap-2">
+          <ArrowUpRight className="h-4 w-4" />
+          New Project
+        </Button>
+      </div>
     </div>
   );
 }

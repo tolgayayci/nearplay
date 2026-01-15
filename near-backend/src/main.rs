@@ -20,9 +20,20 @@ use handlers::{
     filesystem_create_handler, filesystem_delete_handler, filesystem_rename_handler,
     filesystem_mkdir_handler, filesystem_move_handler, project_init_handler,
     filesystem_search_handler,
+    verification_package_handler, verification_metadata_handler,
+    publish_source_handler, check_verification_status_handler,
+    get_wasm_handler,
+    github_clone_handler, project_export_handler,
+    faucet_request_handler, faucet_status_handler, faucet_history_handler,
+    template_create_from_github_handler, template_create_from_project_handler,
+    template_use_handler, template_files_handler, template_file_content_handler,
+    template_main_code_handler, template_delete_handler,
 };
 use services::filesystem::FileSystemService;
 use services::terminal::TerminalService;
+use services::verification::VerificationService;
+use services::github::GitHubService;
+use services::template_storage::TemplateStorageService;
 use websocket::TerminalWsSession;
 
 async fn initialize_base_project() -> std::io::Result<()> {
@@ -127,7 +138,27 @@ async fn main() -> std::io::Result<()> {
     let fs_service = Arc::new(FileSystemService::new(projects_path.clone(), base_project_path));
 
     // Initialize TerminalService
-    let terminal_service = Arc::new(TerminalService::new(projects_path));
+    let terminal_service = Arc::new(TerminalService::new(projects_path.clone()));
+
+    // Initialize VerificationService
+    let verification_service = Arc::new(VerificationService::new(projects_path.clone()));
+
+    // Initialize GitHubService
+    let github_token = env::var("GITHUB_TOKEN").ok();
+    let github_org = env::var("GITHUB_ORG").unwrap_or_else(|_| "nearplay-contracts".to_string());
+    let github_service = github_token.map(|token| {
+        info!("GitHub service initialized for org: {}", github_org);
+        Arc::new(GitHubService::new(token, github_org))
+    });
+
+    // Initialize TemplateStorageService
+    let template_storage_path = PathBuf::from("template-storage");
+    std::fs::create_dir_all(&template_storage_path).ok();
+    let template_service = Arc::new(TemplateStorageService::new(
+        template_storage_path,
+        projects_path.clone(),
+    ));
+    info!("Template storage service initialized");
 
     HttpServer::new(move || {
         let cors = Cors::default()
@@ -136,11 +167,20 @@ async fn main() -> std::io::Result<()> {
             .allow_any_header()
             .supports_credentials();
 
-        App::new()
+        let mut app = App::new()
             .wrap(cors)
             .wrap(Logger::default())
             .app_data(web::Data::new(fs_service.clone()))
             .app_data(web::Data::new(terminal_service.clone()))
+            .app_data(web::Data::new(verification_service.clone()))
+            .app_data(web::Data::new(template_service.clone()));
+
+        // Add GitHub service if configured
+        if let Some(ref gh_service) = github_service {
+            app = app.app_data(web::Data::new(gh_service.clone()));
+        }
+
+        app
             // Existing routes
             .route("/health", web::get().to(health_handler))
             .route("/compile", web::post().to(compile_handler))
@@ -158,6 +198,30 @@ async fn main() -> std::io::Result<()> {
             .route("/api/filesystem/search", web::post().to(filesystem_search_handler))
             // Project initialization
             .route("/api/project/initialize", web::post().to(project_init_handler))
+            // Verification API routes
+            .route("/api/verification/package", web::post().to(verification_package_handler))
+            .route("/api/verification/metadata", web::post().to(verification_metadata_handler))
+            .route("/api/verification/status", web::get().to(check_verification_status_handler))
+            // Source publishing API route
+            .route("/api/source/publish", web::post().to(publish_source_handler))
+            // WASM download for wallet-based deployment
+            .route("/api/wasm/{user_id}/{project_id}", web::get().to(get_wasm_handler))
+            // GitHub clone API
+            .route("/api/github/clone", web::post().to(github_clone_handler))
+            // Project export API
+            .route("/api/project/export/{user_id}/{project_id}", web::get().to(project_export_handler))
+            // Faucet API routes
+            .route("/api/faucet/request", web::post().to(faucet_request_handler))
+            .route("/api/faucet/status", web::get().to(faucet_status_handler))
+            .route("/api/faucet/history", web::get().to(faucet_history_handler))
+            // Template storage API routes
+            .route("/api/templates/create/github", web::post().to(template_create_from_github_handler))
+            .route("/api/templates/create/project", web::post().to(template_create_from_project_handler))
+            .route("/api/templates/use", web::post().to(template_use_handler))
+            .route("/api/templates/{template_id}/files", web::get().to(template_files_handler))
+            .route("/api/templates/{template_id}/files/{path:.*}", web::get().to(template_file_content_handler))
+            .route("/api/templates/{template_id}/code", web::get().to(template_main_code_handler))
+            .route("/api/templates/{template_id}", web::delete().to(template_delete_handler))
             // WebSocket terminal
             .route("/ws/terminal", web::get().to(terminal_ws_handler))
     })

@@ -220,24 +220,87 @@ export async function signInWithGitHub() {
 
     if (error) throw error;
 
-    return { 
-      data, 
-      error: null, 
-      status: 'oauth_redirect' 
+    return {
+      data,
+      error: null,
+      status: 'oauth_redirect'
     };
   } catch (error) {
     console.error('GitHub OAuth error:', error);
-    return { 
-      data: null, 
+    return {
+      data: null,
       error: error instanceof Error ? error : new Error('Failed to sign in with GitHub'),
       status: 'error'
     };
   }
 }
 
+export async function signInWithGoogle() {
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/projects`,
+      },
+    });
+
+    if (error) throw error;
+
+    return {
+      data,
+      error: null,
+      status: 'oauth_redirect'
+    };
+  } catch (error) {
+    console.error('Google OAuth error:', error);
+    return {
+      data: null,
+      error: error instanceof Error ? error : new Error('Failed to sign in with Google'),
+      status: 'error'
+    };
+  }
+}
 
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
+// Identity Linking Functions
+export async function linkGitHubIdentity() {
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: 'github',
+    options: {
+      redirectTo: `${window.location.origin}/projects`,
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function linkGoogleIdentity() {
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/projects`,
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getUserIdentities() {
+  const { data, error } = await supabase.auth.getUserIdentities();
+  if (error) throw error;
+  return data?.identities || [];
+}
+
+export async function unlinkIdentity(identityId: string) {
+  const { data: { identities } } = await supabase.auth.getUserIdentities();
+  const identity = identities?.find(i => i.id === identityId);
+  if (!identity) throw new Error('Identity not found');
+
+  const { error } = await supabase.auth.unlinkIdentity(identity);
   if (error) throw error;
 }
 

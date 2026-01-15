@@ -4,6 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::env;
 use crate::models::{DeployDetails, DeployResponse};
+use crate::services::compilation::{update_cargo_toml_repository, recompile_project};
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_primitives::types::AccountId;
@@ -11,13 +12,17 @@ use near_primitives::transaction::{Action, CreateAccountAction, DeployContractAc
 use near_crypto::{SecretKey, PublicKey, InMemorySigner, Signer};
 use std::str::FromStr;
 
-const TESTNET_RPC_URL: &str = "https://rpc.testnet.near.org";
+const DEFAULT_TESTNET_RPC_URL: &str = "https://rpc.testnet.near.org";
+const GITHUB_ORG: &str = "nearplay-contracts";
 
 pub async fn deploy_contract(
     user_id: &str,
     project_id: &str,
     _account_id: Option<&str>,
+    rpc_url: Option<&str>,
 ) -> Result<DeployResponse> {
+    // Use provided RPC URL or fall back to default
+    let rpc_url = rpc_url.unwrap_or(DEFAULT_TESTNET_RPC_URL);
     info!(
         "Starting NEAR deployment for project {} by user {}",
         project_id, user_id
@@ -61,6 +66,23 @@ pub async fn deploy_contract(
 
     info!("Deploying to subaccount: {} using NEAR JSON-RPC", subaccount_id);
 
+    // Update Cargo.toml with GitHub repo URL for NEP-330 verification
+    let repo_name = subaccount_id_str.replace('.', "-");
+    let repo_url = format!("https://github.com/{}/{}", GITHUB_ORG, repo_name);
+
+    info!("Updating Cargo.toml with repository URL: {}", repo_url);
+    if let Err(e) = update_cargo_toml_repository(&project_path, &repo_url) {
+        warn!("Failed to update Cargo.toml repository: {}", e);
+        // Continue anyway - verification just won't work automatically
+    } else {
+        // Recompile with the new metadata
+        info!("Recompiling with NEP-330 metadata...");
+        if let Err(e) = recompile_project(&project_path).await {
+            warn!("Failed to recompile with metadata: {}", e);
+            // Continue with existing WASM
+        }
+    }
+
     // Find the compiled WASM file for deployment
     let wasm_files: Vec<_> = fs::read_dir(&project_path.join("target").join("near"))
         .context("Failed to read target/near directory")?
@@ -85,8 +107,9 @@ pub async fn deploy_contract(
 
     info!("WASM file loaded, size: {} bytes", wasm_code.len());
 
-    // Create JSON-RPC client
-    let client = JsonRpcClient::connect(TESTNET_RPC_URL);
+    // Create JSON-RPC client with the selected RPC URL
+    info!("Using RPC URL: {}", rpc_url);
+    let client = JsonRpcClient::connect(rpc_url);
 
     // Check if subaccount already exists
     let account_exists = check_account_exists(&client, &subaccount_id_str).await;
@@ -300,6 +323,7 @@ pub async fn deploy_contract(
             timestamp,
             deployer_account: parent_account_id.clone(),
         },
+        github_repo_url: Some(repo_url),
     };
 
     info!(

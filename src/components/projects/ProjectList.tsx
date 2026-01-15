@@ -11,6 +11,8 @@ import {
   Network,
   GitBranch,
   Share2,
+  Download,
+  Link2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +31,7 @@ interface ProjectListProps {
   onNavigate: (id: string) => void;
   onEdit: (project: Project) => void;
   onDelete: (project: Project) => void;
+  onExport?: (project: Project) => void;
   isLoading?: boolean;
 }
 
@@ -38,6 +41,7 @@ export function ProjectList({
   onNavigate,
   onEdit,
   onDelete,
+  onExport,
   isLoading,
 }: ProjectListProps) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -155,17 +159,25 @@ export function ProjectList({
                       >
                         {project.name}
                       </span>
-                      {(project as any).deployment_count > 0 ? (
-                        <Badge variant="secondary" className="text-xs px-2 py-0.5 bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800 w-fit">
-                          <Network className="h-3 w-3 mr-1" />
-                          Deployed
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 w-fit">
-                          <Network className="h-3 w-3 mr-1" />
-                          Not Deployed
-                        </Badge>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {(project as any).deployment_count > 0 ? (
+                          <Badge variant="secondary" className="text-xs px-2 py-0.5 bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800 w-fit">
+                            <Network className="h-3 w-3 mr-1" />
+                            Deployed
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 w-fit">
+                            <Network className="h-3 w-3 mr-1" />
+                            Not Deployed
+                          </Badge>
+                        )}
+                        {project.metadata?.created_from_embed && (
+                          <Badge variant="secondary" className="text-xs px-2 py-0.5 bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800 w-fit">
+                            <Link2 className="h-3 w-3 mr-1" />
+                            From Embed
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -236,6 +248,15 @@ export function ProjectList({
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit
                       </DropdownMenuItem>
+                      {onExport && (
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          onExport(project);
+                        }}>
+                          <Download className="mr-2 h-4 w-4" />
+                          Export as ZIP
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem 
                         onClick={(e) => {

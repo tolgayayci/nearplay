@@ -26,6 +26,7 @@ interface EditorProps {
   onSave?: () => void;
   isSharedView?: boolean;
   onRequestDeploy?: () => void;
+  onOpenTests?: () => void;
   language?: string;
   filePath?: string;
   showHeader?: boolean;
@@ -49,6 +50,7 @@ export function Editor({
   onSave,
   isSharedView = false,
   onRequestDeploy,
+  onOpenTests,
   language = 'rust',
   filePath,
   showHeader = true,
@@ -181,6 +183,7 @@ export function Editor({
           onCompile={onCompile || (() => {})}
           onDeploy={handleDeployClick}
           onSave={handleSave}
+          onOpenTests={onOpenTests || (() => {})}
           isCompiling={isCompiling || false}
           isSaving={isSaving}
           hasSuccessfulCompilation={lastCompilation?.success}

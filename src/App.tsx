@@ -6,11 +6,17 @@ import { LandingPage } from '@/pages/LandingPage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
 import { EditorPage } from '@/pages/EditorPage';
 import { SharedProjectPage } from '@/pages/SharedProjectPage';
+import { TemplatesPage } from '@/pages/TemplatesPage';
+import { TemplateDetailPage } from '@/pages/TemplateDetailPage';
+import { EmbedPage } from '@/pages/EmbedPage';
+import { EmbedsPage } from '@/pages/EmbedsPage';
 import { GAPageView } from '@/components/analytics/GAPageView';
 import { initGA } from '@/lib/analytics';
 import { supabase } from '@/lib/supabase';
 import { User } from '@/lib/types';
 import { createInitialProjects } from '@/lib/auth';
+import { RPCProvider } from '@/contexts/RPCContext';
+import { WalletProvider } from '@/contexts/WalletContext';
 
 // Auth context for centralized state management
 type AuthContextType = {
@@ -347,7 +353,10 @@ export function App() {
 function AppContent() {
   const { isLoading, isAuthenticated } = useAuth();
   const location = useLocation();
-  const isPublicRoute = location.pathname === '/' || location.pathname.includes('/shared') || location.pathname.startsWith('/s/');
+  const isPublicRoute = location.pathname === '/' ||
+    location.pathname.includes('/shared') ||
+    location.pathname.startsWith('/s/') ||
+    location.pathname.startsWith('/embed/');
 
   // Show loading state while checking initial auth
   if (isLoading) {
@@ -375,6 +384,7 @@ function AppContent() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/projects/:id/shared" element={<SharedProjectPage />} />
           <Route path="/s/:token" element={<SharedProjectPage />} />
+          <Route path="/embed/:id" element={<EmbedPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Toaster />
@@ -383,25 +393,41 @@ function AppContent() {
   }
 
   // For authenticated routes, use ThemeProvider for dark/light mode support
+  // Also wrap with RPC and Wallet providers for wallet integration
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <Routes>
-        {/* Protected routes */}
-        <Route path="/projects" element={
-          <PrivateRoute>
-            <ProjectsPage />
-          </PrivateRoute>
-        } />
-        <Route path="/projects/:id" element={
-          <PrivateRoute>
-            <EditorPage />
-          </PrivateRoute>
-        } />
+      <RPCProvider>
+        <WalletProvider>
+          <Routes>
+            {/* Protected routes */}
+            <Route path="/projects" element={
+              <PrivateRoute>
+                <ProjectsPage />
+              </PrivateRoute>
+            } />
+            <Route path="/projects/:id" element={
+              <PrivateRoute>
+                <EditorPage />
+              </PrivateRoute>
+            } />
 
-        {/* Catch all redirect */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      <Toaster />
+            {/* Templates - semi-public (can browse, need auth to use) */}
+            <Route path="/templates" element={<TemplatesPage />} />
+            <Route path="/templates/:id" element={<TemplateDetailPage />} />
+
+            {/* Embeds management - protected */}
+            <Route path="/embeds" element={
+              <PrivateRoute>
+                <EmbedsPage />
+              </PrivateRoute>
+            } />
+
+            {/* Catch all redirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          <Toaster />
+        </WalletProvider>
+      </RPCProvider>
     </ThemeProvider>
   );
 }

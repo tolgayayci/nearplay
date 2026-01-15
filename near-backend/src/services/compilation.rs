@@ -8,6 +8,58 @@ use std::time::Instant;
 
 use crate::models::{CompileDetails, CompileResponse};
 
+/// Update Cargo.toml with NEP-330 repository metadata for verification
+pub fn update_cargo_toml_repository(project_path: &PathBuf, repo_url: &str) -> Result<()> {
+    let cargo_toml_path = project_path.join("Cargo.toml");
+
+    if !cargo_toml_path.exists() {
+        return Err(anyhow::anyhow!("Cargo.toml not found"));
+    }
+
+    let content = fs::read_to_string(&cargo_toml_path)
+        .context("Failed to read Cargo.toml")?;
+
+    // Replace the repository line
+    let updated_content = content
+        .lines()
+        .map(|line| {
+            if line.trim().starts_with("repository") {
+                format!("repository = \"{}\"", repo_url)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    fs::write(&cargo_toml_path, updated_content)
+        .context("Failed to write updated Cargo.toml")?;
+
+    info!("Updated Cargo.toml repository to: {}", repo_url);
+    Ok(())
+}
+
+/// Recompile project (used after updating Cargo.toml metadata)
+pub async fn recompile_project(project_path: &PathBuf) -> Result<()> {
+    info!("Recompiling project at: {:?}", project_path);
+
+    let output = Command::new("cargo")
+        .arg("near")
+        .arg("build")
+        .arg("non-reproducible-wasm")
+        .current_dir(project_path)
+        .output()
+        .context("Failed to execute cargo near build")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!("Recompilation failed: {}", stderr));
+    }
+
+    info!("Recompilation successful");
+    Ok(())
+}
+
 pub async fn compile_contract(
     code: &str,
     user_id: &str,

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { CompilationResult, DeploymentResult, MethodCallResult, FileNode, FileContent, CrateSearchResponse, CrateVersionsResponse, CrateInfo, CrateVersion } from './types';
+import { CompilationResult, DeploymentResult, MethodCallResult, FileNode, FileContent, CrateSearchResponse, CrateVersionsResponse, CrateInfo, CrateVersion, FaucetStatusResponse, FaucetRequestResponse } from './types';
 import { API_URL } from './config';
 
 // Create axios instance with default config
@@ -20,6 +20,7 @@ interface CompileRequest {
 interface DeployRequest {
   user_id: string;
   project_id: string;
+  rpc_url?: string;
 }
 
 interface MethodCallRequest {
@@ -103,12 +104,14 @@ export async function compileContract(
  */
 export async function deployContract(
   userId: string,
-  projectId: string
+  projectId: string,
+  rpcUrl?: string
 ): Promise<DeploymentResult> {
   try {
     const payload: DeployRequest = {
       user_id: userId,
       project_id: projectId,
+      rpc_url: rpcUrl,
     };
 
     const { data: response } = await api.post<ApiResponse<DeploymentResult>>('/deploy', payload);
@@ -481,6 +484,49 @@ export async function searchFiles(
 }
 
 // ============================================
+// Project Export API
+// ============================================
+
+/**
+ * Export a project as a ZIP file
+ * Downloads the project files (excluding target/ and .git/)
+ */
+export async function exportProject(
+  userId: string,
+  projectId: string,
+  projectName: string
+): Promise<void> {
+  try {
+    const response = await api.get(`/api/project/export/${userId}/${projectId}`, {
+      responseType: 'blob',
+    });
+
+    // Create download link
+    const blob = new Blob([response.data], { type: 'application/zip' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${projectName}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data) {
+      // Try to parse error response if it's JSON
+      try {
+        const text = await (error.response.data as Blob).text();
+        const apiError = JSON.parse(text) as ApiResponse<any>;
+        throw new Error(apiError.error?.message || 'Failed to export project');
+      } catch {
+        throw new Error('Failed to export project');
+      }
+    }
+    throw error instanceof Error ? error : new Error('Failed to export project');
+  }
+}
+
+// ============================================
 // Crates.io API
 // ============================================
 
@@ -557,5 +603,72 @@ export async function getCrateDetails(
   } catch (error) {
     console.error('Failed to get crate details:', error);
     throw error instanceof Error ? error : new Error('Failed to get crate details');
+  }
+}
+
+// ============================================
+// Faucet API
+// ============================================
+
+/**
+ * Get faucet status for a user (rate limit info, balance)
+ */
+export async function getFaucetStatus(userId: string): Promise<FaucetStatusResponse> {
+  try {
+    const { data: response } = await api.get<ApiResponse<FaucetStatusResponse>>(
+      '/api/faucet/status',
+      { params: { user_id: userId } }
+    );
+
+    if (!response.success || !response.data) {
+      throw new Error(response.error?.message || 'Failed to get faucet status');
+    }
+
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data) {
+      const apiError = error.response.data as ApiResponse<any>;
+      throw new Error(apiError.error?.message || 'Failed to get faucet status');
+    }
+    throw error instanceof Error ? error : new Error('Failed to get faucet status');
+  }
+}
+
+/**
+ * Request tokens from the faucet
+ */
+export async function requestFaucet(
+  userId: string,
+  recipientAccount: string,
+  turnstileToken: string
+): Promise<FaucetRequestResponse> {
+  try {
+    const { data: response } = await api.post<ApiResponse<FaucetRequestResponse>>(
+      '/api/faucet/request',
+      {
+        user_id: userId,
+        recipient_account: recipientAccount,
+        turnstile_token: turnstileToken,
+      }
+    );
+
+    if (!response.success || !response.data) {
+      throw new Error(response.error?.message || 'Faucet request failed');
+    }
+
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data) {
+      const apiError = error.response.data as ApiResponse<any>;
+      // Return error response instead of throwing
+      return {
+        success: false,
+        error: apiError.error?.message || 'Faucet request failed',
+      };
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Faucet request failed',
+    };
   }
 }

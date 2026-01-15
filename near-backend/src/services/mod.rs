@@ -1,5 +1,9 @@
 pub mod compilation;
 pub mod deployment;
+pub mod faucet;
 pub mod filesystem;
+pub mod github;
 pub mod method_call;
+pub mod template_storage;
 pub mod terminal;
+pub mod verification;

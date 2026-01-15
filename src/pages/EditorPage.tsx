@@ -16,6 +16,7 @@ import {
   Loader2,
   FolderTree,
   Terminal as TerminalIcon,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,7 @@ import { Editor } from "@/components/Editor";
 import { useToast } from "@/hooks/use-toast";
 import { Project, CompilationResult, FileNode } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
-import { compileContract } from "@/lib/api";
+import { compileContract, exportProject } from "@/lib/api";
 import { useAuth } from "@/App";
 import { UserNav } from "@/components/UserNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -33,6 +34,8 @@ import { SEO } from "@/components/seo/SEO";
 import { ShareProjectDialog } from "@/components/ShareProjectDialog";
 import { DeployDialog } from "@/components/editor/DeployDialog";
 import { Badge } from "@/components/ui/badge";
+import { WalletButton } from "@/components/wallet/WalletButton";
+import { RPCSettingsPanel } from "@/components/settings/RPCSettingsPanel";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -42,6 +45,7 @@ import { FileExplorer, FileExplorerRef } from "@/components/explorer/FileExplore
 import { useProjectFiles } from "@/hooks/useProjectFiles";
 import { Terminal } from "@/components/terminal/Terminal";
 import { PackageManagerModal } from "@/components/packages/PackageManagerModal";
+import { TestsModal } from "@/components/testing/TestsModal";
 import {
   Tooltip,
   TooltipContent,
@@ -78,6 +82,9 @@ export function EditorPage() {
   const [showABIError, setShowABIError] = useState(false);
   const [terminalOutput, setTerminalOutput] = useState<string>("");
   const [showPackageModal, setShowPackageModal] = useState(false);
+  const [showTestsModal, setShowTestsModal] = useState(false);
+  const [showRPCSettings, setShowRPCSettings] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const fileExplorerRef = useRef<FileExplorerRef>(null);
   const hasAutoOpenedRef = useRef(false);
@@ -512,6 +519,28 @@ export function EditorPage() {
     );
   };
 
+  const handleExportProject = async () => {
+    if (!user || !project) return;
+
+    setIsExporting(true);
+    try {
+      await exportProject(user.id, project.id, project.name);
+      toast({
+        title: "Export Successful",
+        description: "Project exported! Run 'cargo near build' locally to compile.",
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "Failed to export project",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleFileSelect = useCallback(async (path: string) => {
     await openFile(path);
   }, [openFile]);
@@ -687,6 +716,28 @@ export function EditorPage() {
 
             {/* Right side - Actions */}
             <div className="flex-1 flex items-center justify-end gap-4">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="h-9 px-3"
+                      onClick={handleExportProject}
+                      disabled={isExporting}
+                    >
+                      {isExporting ? (
+                        <Loader2 className="h-[1.2rem] w-[1.2rem] animate-spin" />
+                      ) : (
+                        <Download className="h-[1.2rem] w-[1.2rem]" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Export as ZIP</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
               <Button
                 variant="outline"
                 className="h-9 px-3 flex items-center gap-2"
@@ -701,6 +752,7 @@ export function EditorPage() {
                 <Share2 className="h-[1.2rem] w-[1.2rem]" />
               </Button>
 
+              <WalletButton onOpenRPCSettings={() => setShowRPCSettings(true)} />
               <ThemeToggle />
               <UserNav />
             </div>
@@ -741,6 +793,11 @@ export function EditorPage() {
               }}
             />
           )}
+
+          <RPCSettingsPanel
+            open={showRPCSettings}
+            onOpenChange={setShowRPCSettings}
+          />
         </>
       )}
 
@@ -784,6 +841,7 @@ export function EditorPage() {
                           onDeploySuccess={handleDeploySuccess}
                           onSave={handleSave}
                           onRequestDeploy={handleRequestDeploy}
+                          onOpenTests={() => setShowTestsModal(true)}
                           language={activeFile.language}
                           filePath={activeFile.path}
                           openFiles={openFiles}
@@ -865,6 +923,7 @@ export function EditorPage() {
                     >
                       <ABIView
                         projectId={project.id}
+                        userId={user?.id}
                         refreshTrigger={refreshABITrigger}
                         onRequestDeploy={handleRequestDeploy}
                       />
@@ -895,6 +954,16 @@ export function EditorPage() {
 
         </ResizablePanelGroup>
       </div>
+
+      {/* Tests Modal */}
+      {user && id && (
+        <TestsModal
+          open={showTestsModal}
+          onOpenChange={setShowTestsModal}
+          userId={user.id}
+          projectId={id}
+        />
+      )}
     </div>
     </TooltipProvider>
   );

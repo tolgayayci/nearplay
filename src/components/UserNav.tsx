@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, User as UserIcon, Bug } from "lucide-react";
+import { LogOut, User as UserIcon, Bug, Link2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,12 +15,14 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { signOut } from "@/lib/auth";
 import { ProfileDialog } from "@/components/ProfileDialog";
+import { LinkAccountsDialog } from "@/components/LinkAccountsDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/App";
 
 export function UserNav() {
   const { user, refreshUser } = useAuth();
   const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [showLinkAccountsDialog, setShowLinkAccountsDialog] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -79,6 +81,10 @@ export function UserNav() {
               <UserIcon className="mr-2 h-4 w-4" />
               Profile
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowLinkAccountsDialog(true)}>
+              <Link2 className="mr-2 h-4 w-4" />
+              Linked Accounts
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleReportIssue}>
               <Bug className="mr-2 h-4 w-4" />
               Report Issue
@@ -97,6 +103,11 @@ export function UserNav() {
         onOpenChange={setShowProfileDialog}
         user={user}
         onUserUpdate={() => refreshUser()}
+      />
+
+      <LinkAccountsDialog
+        open={showLinkAccountsDialog}
+        onOpenChange={setShowLinkAccountsDialog}
       />
     </>
   );

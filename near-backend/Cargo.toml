@@ -30,6 +30,8 @@ ed25519-dalek = "1.0"
 bs58 = "0.5"
 borsh = "0.10"
 walkdir = "2.4"
+zip = "0.6"
+regex = "1.10"
 
 [dev-dependencies]
 actix-rt = "2.9"

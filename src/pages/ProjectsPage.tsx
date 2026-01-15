@@ -1,38 +1,42 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Code2Icon, Blocks, Sparkles, Bug } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { ThemeProvider } from 'next-themes';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { Code2Icon, Rocket, Droplets, Layout, Link2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Project } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { Project, DeploymentWithProject } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/App';
 import { UserNav } from '@/components/UserNav';
 import { ProjectList } from '@/components/projects/ProjectList';
-import { TemplateList } from '@/components/projects/TemplateList';
-import { PROJECT_TEMPLATES } from '@/lib/templates';
+import { DeploymentList } from '@/components/projects/DeploymentList';
 import { ProjectHeader } from '@/components/projects/ProjectHeader';
-import { ProjectTabs, SortOption } from '@/components/projects/ProjectTabs';
+import { ProjectTabs, SortOption, NetworkFilter, WalletFilter } from '@/components/projects/ProjectTabs';
 import { ProjectEditDialog } from '@/components/projects/ProjectEditDialog';
 import { ProjectDeleteDialog } from '@/components/projects/ProjectDeleteDialog';
 import { NewProjectDialog } from '@/components/projects/NewProjectDialog';
-import { cn } from '@/lib/utils';
+import { GitHubImportDialog } from '@/components/projects/GitHubImportDialog';
+import { FaucetDialog } from '@/components/faucet';
 import { SEO } from '@/components/seo/SEO';
-import { Badge } from '@/components/ui/badge';
-import { initializeProject } from '@/lib/api';
+import { initializeProject, exportProject } from '@/lib/api';
 
 export function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [deployments, setDeployments] = useState<DeploymentWithProject[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption['value']>('updated_desc');
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
-  const [activeSection, setActiveSection] = useState<'projects' | 'templates'>('projects');
+  const [activeSection, setActiveSection] = useState<'projects' | 'deployments'>('projects');
+  const [showFaucetDialog, setShowFaucetDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingDeployments, setIsLoadingDeployments] = useState(false);
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [showGitHubImportDialog, setShowGitHubImportDialog] = useState(false);
+  const [networkFilter, setNetworkFilter] = useState<NetworkFilter>('all');
+  const [walletFilter, setWalletFilter] = useState<WalletFilter>('all');
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -41,11 +45,20 @@ export function ProjectsPage() {
   useEffect(() => {
     if (user) {
       fetchProjects();
+      fetchDeployments();
     } else {
       setProjects([]);
+      setDeployments([]);
       setIsLoading(false);
     }
   }, [sortBy, user]);
+
+  // Fetch deployments when filters change
+  useEffect(() => {
+    if (user && activeSection === 'deployments') {
+      fetchDeployments();
+    }
+  }, [networkFilter, walletFilter]);
 
   const fetchProjects = async () => {
     if (!user) {
@@ -105,6 +118,96 @@ export function ProjectsPage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchDeployments = async () => {
+    if (!user) {
+      setDeployments([]);
+      return;
+    }
+
+    try {
+      setIsLoadingDeployments(true);
+
+      // Fetch deployments with project info
+      // First get all project IDs for this user
+      const { data: userProjects } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('user_id', user.id);
+
+      const projectIds = userProjects?.map(p => p.id) || [];
+
+      if (projectIds.length === 0) {
+        setDeployments([]);
+        setIsLoadingDeployments(false);
+        return;
+      }
+
+      // Fetch deployments for user's projects
+      let query = supabase
+        .from('deployments')
+        .select(`
+          *,
+          project:projects(id, name)
+        `)
+        .in('project_id', projectIds)
+        .order('created_at', { ascending: false });
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Apply filters
+      let filtered = data || [];
+
+      // Network filter
+      if (networkFilter !== 'all') {
+        filtered = filtered.filter(d => {
+          const network = d.metadata?.network || 'testnet';
+          return network === networkFilter;
+        });
+      }
+
+      // Wallet filter
+      if (walletFilter !== 'all') {
+        filtered = filtered.filter(d => {
+          const walletType = d.metadata?.wallet_type;
+          return walletType === walletFilter;
+        });
+      }
+
+      // Apply sorting
+      const sorted = filtered.sort((a, b) => {
+        switch (sortBy) {
+          case 'created_desc':
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          case 'created_asc':
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          case 'name_asc':
+            return (a.project?.name || '').localeCompare(b.project?.name || '');
+          case 'name_desc':
+            return (b.project?.name || '').localeCompare(a.project?.name || '');
+          case 'network_asc':
+            return (a.metadata?.network || 'testnet').localeCompare(b.metadata?.network || 'testnet');
+          case 'network_desc':
+            return (b.metadata?.network || 'testnet').localeCompare(a.metadata?.network || 'testnet');
+          default:
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
+      });
+
+      setDeployments(sorted);
+    } catch (error) {
+      console.error('Error fetching deployments:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load deployments',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingDeployments(false);
     }
   };
 
@@ -210,8 +313,8 @@ export function ProjectsPage() {
 
       if (error) throw error;
 
-      setProjects(projects.map(p => 
-        p.id === projectToEdit.id 
+      setProjects(projects.map(p =>
+        p.id === projectToEdit.id
           ? { ...p, name: editName, description: editDescription }
           : p
       ));
@@ -231,6 +334,25 @@ export function ProjectsPage() {
     }
   };
 
+  const handleExportProject = async (project: Project) => {
+    if (!user) return;
+
+    try {
+      await exportProject(user.id, project.id, project.name);
+      toast({
+        title: "Export Successful",
+        description: "Project exported! Run 'cargo near build' locally to compile.",
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "Failed to export project",
+        variant: "destructive",
+      });
+    }
+  };
+
   const sections = [
     {
       id: 'projects' as const,
@@ -239,10 +361,10 @@ export function ProjectsPage() {
       count: projects.length,
     },
     {
-      id: 'templates' as const,
-      label: 'Templates',
-      icon: Sparkles,
-      count: PROJECT_TEMPLATES.length,
+      id: 'deployments' as const,
+      label: 'Deployments',
+      icon: Rocket,
+      count: deployments.length,
     },
   ];
 
@@ -260,16 +382,16 @@ export function ProjectsPage() {
               setEditDescription(project.description || '');
             }}
             onDelete={setProjectToDelete}
+            onExport={handleExportProject}
             isLoading={isLoading}
           />
         );
-      case 'templates':
+      case 'deployments':
         return (
-          <TemplateList
+          <DeploymentList
+            deployments={deployments}
             searchQuery={searchQuery}
-            onUseTemplate={handleCreateProject}
-            isLoading={isLoading}
-            sortBy={sortBy}
+            isLoading={isLoadingDeployments}
           />
         );
     }
@@ -287,7 +409,7 @@ export function ProjectsPage() {
       <header className="flex-none h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto h-full flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
               <div className="p-2 rounded-xl bg-teal-50 dark:bg-teal-950">
                 <Sparkles className="h-5 w-5 text-teal-600 dark:text-teal-400" />
               </div>
@@ -295,6 +417,26 @@ export function ProjectsPage() {
                 <span className="text-xl font-bold text-gray-900 dark:text-white">NEAR Playground</span>
               </div>
             </div>
+            <nav className="hidden md:flex items-center gap-1 ml-4">
+              <Button variant="ghost" className="bg-muted gap-2">
+                <Code2Icon className="h-4 w-4" />
+                Projects
+              </Button>
+              <Button variant="ghost" onClick={() => navigate('/templates')} className="gap-2">
+                <Layout className="h-4 w-4" />
+                Templates
+              </Button>
+              <Button variant="ghost" onClick={() => navigate('/embeds')} className="gap-2">
+                <Link2 className="h-4 w-4" />
+                Embeds
+              </Button>
+              {user && (
+                <Button variant="ghost" onClick={() => setShowFaucetDialog(true)} className="gap-2">
+                  <Droplets className="h-4 w-4" />
+                  Faucet
+                </Button>
+              )}
+            </nav>
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />
@@ -308,7 +450,10 @@ export function ProjectsPage() {
         <div className="h-full flex flex-col py-8">
           {/* Fixed Project Header */}
           <div className="flex-none mb-8">
-            <ProjectHeader onNewProject={() => setShowNewProjectDialog(true)} />
+            <ProjectHeader
+              onNewProject={() => setShowNewProjectDialog(true)}
+              onImportFromGitHub={() => setShowGitHubImportDialog(true)}
+            />
           </div>
 
           {/* Fixed Tabs */}
@@ -321,6 +466,10 @@ export function ProjectsPage() {
               onSectionChange={setActiveSection}
               onSearchChange={setSearchQuery}
               onSortChange={setSortBy}
+              networkFilter={networkFilter}
+              walletFilter={walletFilter}
+              onNetworkFilterChange={setNetworkFilter}
+              onWalletFilterChange={setWalletFilter}
             />
           </div>
 
@@ -352,6 +501,23 @@ export function ProjectsPage() {
         onDescriptionChange={setEditDescription}
         onClose={() => setProjectToEdit(null)}
         onConfirm={handleUpdateProject}
+      />
+
+      <GitHubImportDialog
+        open={showGitHubImportDialog}
+        onClose={() => setShowGitHubImportDialog(false)}
+        onSuccess={async (projectId) => {
+          setShowGitHubImportDialog(false);
+          await fetchProjects();
+          navigate(`/projects/${projectId}`);
+        }}
+        userId={user?.id || ''}
+      />
+
+      <FaucetDialog
+        open={showFaucetDialog}
+        onOpenChange={setShowFaucetDialog}
+        userId={user?.id || ''}
       />
     </div>
   );

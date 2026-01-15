@@ -4,14 +4,24 @@ export const API_URL = import.meta.env.VITE_API_URL;
 // NEAR Network Configuration
 export const NEAR_CONFIG = {
   testnet: {
-    networkId: import.meta.env.VITE_NEAR_NETWORK || "testnet",
-    nodeUrl: import.meta.env.VITE_NEAR_NODE_URL || "https://rpc.testnet.near.org",
-    walletUrl: import.meta.env.VITE_NEAR_WALLET_URL || "https://wallet.testnet.near.org",
-    helperUrl: import.meta.env.VITE_NEAR_HELPER_URL || "https://helper.testnet.near.org",
-    explorerUrl: import.meta.env.VITE_NEAR_EXPLORER_URL || "https://explorer.testnet.near.org",
+    networkId: "testnet",
+    nodeUrl: "https://rpc.testnet.near.org",
+    walletUrl: "https://wallet.testnet.near.org",
+    helperUrl: "https://helper.testnet.near.org",
+    explorerUrl: "https://testnet.nearblocks.io",
     name: "NEAR Testnet",
   },
+  mainnet: {
+    networkId: "mainnet",
+    nodeUrl: "https://rpc.mainnet.near.org",
+    walletUrl: "https://wallet.near.org",
+    helperUrl: "https://helper.mainnet.near.org",
+    explorerUrl: "https://nearblocks.io",
+    name: "NEAR Mainnet",
+  },
 } as const;
+
+export type Network = keyof typeof NEAR_CONFIG;
 
 // Analytics Configuration
 export const GA_TRACKING_ID = import.meta.env.VITE_GA_TRACKING_ID;
@@ -35,13 +45,15 @@ export const SUPABASE_CONFIG = {
 } as const;
 
 // Helper function to get NearBlocks URL for transaction
-export function getExplorerTxUrl(txHash: string): string {
-  return `https://testnet.nearblocks.io/txns/${txHash}`;
+export function getExplorerTxUrl(txHash: string, network: Network = 'testnet'): string {
+  const base = NEAR_CONFIG[network].explorerUrl;
+  return `${base}/txns/${txHash}`;
 }
 
 // Helper function to get NearBlocks URL for account
-export function getExplorerAccountUrl(accountId: string): string {
-  return `https://testnet.nearblocks.io/address/${accountId}`;
+export function getExplorerAccountUrl(accountId: string, network: Network = 'testnet'): string {
+  const base = NEAR_CONFIG[network].explorerUrl;
+  return `${base}/address/${accountId}`;
 }
 
 // Helper function to get avatar URL

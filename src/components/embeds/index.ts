@@ -1,0 +1,1 @@
+export { EmbedGenerator } from './EmbedGenerator';

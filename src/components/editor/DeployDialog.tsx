@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,13 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   RocketIcon,
   CheckCircle,
   Terminal,
@@ -18,14 +25,16 @@ import {
   Copy,
   AlertCircle,
   PlayCircle,
-  X,
-  FileCode2,
   Globe,
   Wallet,
   Server,
   Eye,
   Play,
   Coins,
+  Shield,
+  Zap,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { CompilationResult, DeploymentResult } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
@@ -34,6 +43,16 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/App';
 import { getExplorerAccountUrl } from '@/lib/config';
+import { VerificationModal } from '@/components/verification/VerificationModal';
+import { useWallet, formatNearAmount, DeploymentMode } from '@/contexts/WalletContext';
+import { useRPC } from '@/contexts/RPCContext';
+import {
+  deployWithWallet,
+  WalletDeploymentResult,
+  estimateDeploymentCost,
+  formatYoctoNear,
+  getExplorerAccountUrl as getWalletExplorerAccountUrl,
+} from '@/lib/walletDeployment';
 
 interface DeployDialogProps {
   open: boolean;
@@ -55,13 +74,42 @@ export function DeployDialog({
   showABIError = false,
 }: DeployDialogProps) {
   const [isDeploying, setIsDeploying] = useState(false);
-  const [deploymentResult, setDeploymentResult] = useState<DeploymentResult | null>(null);
+  const [deploymentResult, setDeploymentResult] = useState<DeploymentResult | WalletDeploymentResult | null>(null);
   const [deploymentError, setDeploymentError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const countdownInterval = useRef<NodeJS.Timeout | null>(null);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+
+  const {
+    deploymentMode,
+    setDeploymentMode,
+    network,
+    isConnected,
+    accountId,
+    accountBalance,
+    selector,
+    connectWallet,
+    refreshBalance,
+    isLoadingBalance,
+    walletId,
+  } = useWallet();
+
+  const {
+    providers,
+    selectedTestnetProvider,
+    selectedMainnetProvider,
+    setProvider,
+    getCurrentRpcUrl,
+    getProviderById,
+  } = useRPC();
+
+  // Get current provider based on network
+  const currentNetwork = deploymentMode === 'playground' ? 'testnet' : network;
+  const currentProviderId = currentNetwork === 'mainnet'
+    ? selectedMainnetProvider
+    : selectedTestnetProvider;
+  const currentProvider = getProviderById(currentProviderId);
 
   // Reset deployment result when dialog is opened
   useEffect(() => {
@@ -69,23 +117,27 @@ export function DeployDialog({
       setDeploymentResult(null);
       setDeploymentError(null);
       setIsDeploying(false);
-      setCountdown(null);
-      if (countdownInterval.current) {
-        clearInterval(countdownInterval.current);
-      }
     }
   }, [open]);
 
+  // Refresh balance when dialog opens in wallet mode
+  useEffect(() => {
+    if (open && deploymentMode === 'wallet' && isConnected) {
+      refreshBalance();
+    }
+  }, [open, deploymentMode, isConnected, refreshBalance]);
 
-  const handleDeploy = async () => {
+  const handlePlaygroundDeploy = async () => {
     if (showABIError) return;
+    if (!user) {
+      setDeploymentError("Authentication required");
+      return;
+    }
 
     setIsDeploying(true);
     setDeploymentError(null);
-    try {
-      if (!user) throw new Error("Authentication required");
 
-      // Check if code has changed since last compilation
+    try {
       const { data: project } = await supabase
         .from('projects')
         .select('code')
@@ -96,11 +148,11 @@ export function DeployDialog({
         throw new Error("Code has changed since last compilation. Please compile again before deploying.");
       }
 
-      // Deploy the contract
-      const result = await deployContract(user.id, projectId);
+      // Pass the selected RPC URL for playground deployment
+      const rpcUrl = getCurrentRpcUrl('testnet');
+      const result = await deployContract(user.id, projectId, rpcUrl);
       setDeploymentResult(result);
 
-      // Save deployment to database
       const { error: dbError } = await supabase
         .from('deployments')
         .insert({
@@ -118,12 +170,13 @@ export function DeployDialog({
             deployer_account: result.details.deployer_account,
             explorer_url: result.explorer_url,
             network: result.details.network,
+            wallet_type: 'playground',
+            wallet_address: result.details.deployer_account,
           }
         });
 
       if (dbError) throw dbError;
 
-      // Trigger ABI refresh immediately after successful deployment
       onDeploySuccess?.();
 
       toast({
@@ -144,6 +197,99 @@ export function DeployDialog({
     }
   };
 
+  const handleWalletDeploy = async () => {
+    if (showABIError) return;
+    if (!user || !selector || !accountId) {
+      setDeploymentError("Wallet not connected");
+      return;
+    }
+
+    // Check if project is compiled
+    if (!lastCompilation?.success) {
+      setDeploymentError("Please compile your project before deploying.");
+      return;
+    }
+
+    setIsDeploying(true);
+    setDeploymentError(null);
+
+    try {
+      const result = await deployWithWallet({
+        selector,
+        userId: user.id,
+        projectId,
+        targetAccountId: accountId,
+        network,
+      });
+
+      setDeploymentResult(result);
+
+      const { error: dbError } = await supabase
+        .from('deployments')
+        .insert({
+          project_id: projectId,
+          contract_address: result.contractId,
+          chain_id: network === 'mainnet' ? 0 : 1,
+          chain_name: network === 'mainnet' ? 'NEAR Mainnet' : 'NEAR Testnet',
+          deployed_code: lastCompilation?.code_snapshot || '',
+          abi: lastCompilation?.abi || {},
+          metadata: {
+            tx_hash: result.transactionHash,
+            explorer_url: result.explorerUrl,
+            network,
+            block_height: result.blockHeight,
+            wallet_type: 'external',
+            wallet_address: accountId,
+            wallet_name: walletId || 'Unknown Wallet',
+          }
+        });
+
+      if (dbError) console.error('Failed to save deployment:', dbError);
+
+      onDeploySuccess?.();
+
+      toast({
+        title: "Success",
+        description: `Contract deployed successfully to NEAR ${network}`,
+      });
+    } catch (error) {
+      console.error('Wallet deployment error:', error);
+      const errorMessage = error instanceof Error
+        ? error.message
+        : "Failed to deploy contract";
+
+      // Format better error messages
+      if (errorMessage.includes('Cannot connect to backend')) {
+        setDeploymentError("Cannot connect to the backend server. Please ensure the server is running.");
+      } else {
+        setDeploymentError(errorMessage);
+      }
+
+      toast({
+        title: "Deployment Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeploying(false);
+    }
+  };
+
+  const handleDeploy = () => {
+    if (deploymentMode === 'wallet') {
+      handleWalletDeploy();
+    } else {
+      handlePlaygroundDeploy();
+    }
+  };
+
+  const handleModeSwitch = (mode: DeploymentMode) => {
+    setDeploymentMode(mode);
+    if (mode === 'wallet' && !isConnected) {
+      connectWallet();
+    }
+  };
+
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
@@ -154,38 +300,56 @@ export function DeployDialog({
     });
   };
 
-  // Extract metrics from compilation
   const wasmSizeKB = lastCompilation?.details?.wasm_size
     ? (lastCompilation.details.wasm_size / 1024).toFixed(2)
     : null;
 
+  const estimatedCost = wasmSizeKB
+    ? formatYoctoNear(estimateDeploymentCost(lastCompilation!.details.wasm_size!))
+    : null;
+
+  const getContractId = () => {
+    if (!deploymentResult) return '';
+    return 'contract_id' in deploymentResult
+      ? deploymentResult.contract_id
+      : deploymentResult.contractId;
+  };
+
+  const getTransactionHash = () => {
+    if (!deploymentResult) return '';
+    return 'transaction_hash' in deploymentResult
+      ? deploymentResult.transaction_hash
+      : deploymentResult.transactionHash;
+  };
+
+  const getExplorerUrl = () => {
+    if (!deploymentResult) return '';
+    return 'explorer_url' in deploymentResult
+      ? deploymentResult.explorer_url
+      : deploymentResult.explorerUrl;
+  };
 
   if (showABIError) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-500">
-              <AlertCircle className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
               ABI Not Found
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            <div className="p-4 rounded-lg bg-red-500/5 border border-red-500/20 space-y-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-red-500 flex-none mt-0.5" />
-                <div className="space-y-2">
-                  <p className="text-sm">
-                    No valid ABI found for your contract. This usually happens when:
-                  </p>
-                  <ul className="text-sm space-y-1 list-disc pl-4">
-                    <li>The contract hasn't been compiled successfully</li>
-                    <li>The last compilation failed</li>
-                    <li>The contract doesn't expose any public methods</li>
-                  </ul>
-                </div>
-              </div>
+          <div className="py-4">
+            <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+              <p className="text-sm mb-2">
+                No valid ABI found for your contract. This usually happens when:
+              </p>
+              <ul className="text-sm text-muted-foreground list-disc pl-4 space-y-1">
+                <li>The contract hasn't been compiled successfully</li>
+                <li>The last compilation failed</li>
+                <li>The contract doesn't expose any public methods</li>
+              </ul>
             </div>
           </div>
 
@@ -198,9 +362,8 @@ export function DeployDialog({
                 onOpenChange(false);
                 onCompile?.();
               }}
-              className="gap-2"
             >
-              <Terminal className="h-4 w-4" />
+              <Terminal className="h-4 w-4 mr-2" />
               Compile Again
             </Button>
           </DialogFooter>
@@ -212,7 +375,7 @@ export function DeployDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-[720px] max-h-[85vh] overflow-hidden"
+        className="sm:max-w-[600px] max-h-[85vh] overflow-hidden"
         onInteractOutside={(e) => {
           if (!isDeploying) {
             e.preventDefault();
@@ -222,54 +385,203 @@ export function DeployDialog({
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <RocketIcon className="h-4 w-4" />
+            <RocketIcon className="h-5 w-5" />
             Deploy Contract
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 max-h-[calc(85vh-140px)]">
-          <div className="space-y-4 py-4">
-            {/* Network Information */}
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-md">
-                  <Globe className="h-4 w-4 text-blue-500" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium">NEAR Testnet</div>
-                  <div className="text-xs text-muted-foreground">rpc.testnet.near.org</div>
-                </div>
+        <ScrollArea className="flex-1 max-h-[calc(85vh-160px)]">
+          <div className="space-y-4 py-2">
+            {/* Deployment Mode Selector */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Deployment Method</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleModeSwitch('playground')}
+                  className={cn(
+                    'flex items-center gap-3 p-3 rounded-lg border text-left transition-colors',
+                    deploymentMode === 'playground'
+                      ? 'border-primary bg-muted'
+                      : 'border-border hover:bg-muted/50'
+                  )}
+                >
+                  <Zap className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">Playground</span>
+                      {deploymentMode === 'playground' && (
+                        <CheckCircle className="h-3.5 w-3.5 text-primary" />
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground">Free testnet</span>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleModeSwitch('wallet')}
+                  className={cn(
+                    'flex items-center gap-3 p-3 rounded-lg border text-left transition-colors',
+                    deploymentMode === 'wallet'
+                      ? 'border-primary bg-muted'
+                      : 'border-border hover:bg-muted/50'
+                  )}
+                >
+                  <Wallet className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">External Wallet</span>
+                      {deploymentMode === 'wallet' && (
+                        <CheckCircle className="h-3.5 w-3.5 text-primary" />
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground">Your wallet</span>
+                  </div>
+                </button>
               </div>
+            </div>
 
-              <div className="border-t" />
-
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-purple-500/10 rounded-md">
-                  <Wallet className="h-4 w-4 text-purple-500" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium">New Account for Every Development</div>
-                  <div className="text-xs text-muted-foreground">Each deployment creates a new sub-account funded with 2 NEAR</div>
-                </div>
-              </div>
-
-              {wasmSizeKB && (
+            {/* Mode-specific Content */}
+            {deploymentMode === 'playground' ? (
+              <div className="p-3 rounded-lg border bg-muted/30">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-green-500/10 rounded-md">
-                    <Server className="h-4 w-4 text-green-500" />
+                  <Zap className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Playground Wallet</p>
+                    <p className="text-xs text-muted-foreground">
+                      Free deployment with 2 NEAR funded. Testnet only.
+                    </p>
                   </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">Contract Size</div>
-                    <div className="text-xs text-muted-foreground">{wasmSizeKB} KB optimized WASM</div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Mainnet Warning */}
+                {network === 'mainnet' && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg border border-destructive/30 bg-destructive/5">
+                    <AlertTriangle className="h-4 w-4 text-destructive mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium">Mainnet Deployment</p>
+                      <p className="text-xs text-muted-foreground">
+                        This will use real NEAR tokens.
+                      </p>
+                    </div>
                   </div>
+                )}
+
+                {/* Wallet Connection Status */}
+                {isConnected && accountId ? (
+                  <div className="p-3 rounded-lg border bg-muted/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-green-500" />
+                        <span className="text-xs text-muted-foreground">Connected via</span>
+                        <span className="text-xs font-medium">
+                          {walletId === 'my-near-wallet' ? 'MyNearWallet' :
+                           walletId === 'intear-wallet' ? 'Intear Wallet' :
+                           walletId === 'here-wallet' ? 'HERE Wallet' :
+                           walletId === 'sender' ? 'Sender' :
+                           walletId || 'Wallet'}
+                        </span>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {network === 'mainnet' ? 'Mainnet' : 'Testnet'}
+                      </Badge>
+                    </div>
+                    <p className="font-mono text-sm truncate mb-2">{accountId}</p>
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <div>
+                        <span className="text-xs text-muted-foreground">Balance</span>
+                        <p className="text-sm font-medium">
+                          {isLoadingBalance ? (
+                            'Loading...'
+                          ) : accountBalance ? (
+                            `${formatNearAmount(accountBalance.available)} NEAR`
+                          ) : (
+                            '--'
+                          )}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={refreshBalance}
+                        disabled={isLoadingBalance}
+                      >
+                        <RefreshCw className={cn("h-3.5 w-3.5", isLoadingBalance && "animate-spin")} />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-lg border border-dashed text-center">
+                    <Wallet className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Connect your wallet to deploy
+                    </p>
+                    <Button size="sm" onClick={connectWallet}>
+                      Connect Wallet
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* RPC Provider Selector */}
+            <div className="p-3 rounded-lg border bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Server className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">RPC Provider</span>
+                </div>
+                <Select
+                  value={currentProviderId}
+                  onValueChange={(value) => setProvider(currentNetwork, value)}
+                >
+                  <SelectTrigger className="h-7 w-[160px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {providers.map((p) => (
+                      <SelectItem key={p.id} value={p.id} className="text-xs">
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-muted-foreground font-mono mt-1.5 truncate">
+                {getCurrentRpcUrl(currentNetwork)}
+              </p>
+            </div>
+
+            {/* Contract Info */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-lg border bg-muted/30">
+                <div className="flex items-center gap-2 mb-1">
+                  <Globe className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Network</span>
+                </div>
+                <p className="text-sm font-medium">
+                  NEAR {currentNetwork === 'mainnet' ? 'Mainnet' : 'Testnet'}
+                </p>
+              </div>
+              {wasmSizeKB && (
+                <div className="p-3 rounded-lg border bg-muted/30">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Server className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Size</span>
+                  </div>
+                  <p className="text-sm font-medium">{wasmSizeKB} KB</p>
+                  {estimatedCost && deploymentMode === 'wallet' && (
+                    <p className="text-xs text-muted-foreground">~{estimatedCost} NEAR</p>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* ABI Interface */}
+            {/* ABI Preview */}
             {(() => {
-              // Extract functions from ABI
-              let functions = [];
+              let functions: any[] = [];
               if (Array.isArray(lastCompilation?.abi)) {
                 functions = lastCompilation.abi;
               } else if (lastCompilation?.abi?.body?.functions) {
@@ -280,183 +592,85 @@ export function DeployDialog({
 
               if (functions.length > 0) {
                 return (
-                  <>
-                    <div className="border-t" />
-                    <div className="space-y-3">
-                      <div className="text-sm font-medium">Contract Interface</div>
-                      <div className="space-y-2">
-                        {functions.map((func, index) => {
-                          const isView = func.stateMutability === 'view' || func.kind === 'view';
-                          const isPayable = func.stateMutability === 'payable' || func.payable;
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Contract Methods ({functions.length})
+                    </label>
+                    <div className="space-y-1.5">
+                      {functions.slice(0, 4).map((func: any, index: number) => {
+                        const isView = func.stateMutability === 'view' || func.kind === 'view';
+                        const isPayable = func.stateMutability === 'payable' || func.payable;
 
-                          // Format parameters - Handle NEAR ABI format
-                          let params = [];
-                          if (func.params && func.params.args) {
-                            params = func.params.args.map((arg: any) => {
-                              // Convert type_schema to simple type string (same logic as ABIView)
-                              let type = 'string'; // default
-                              if (arg.type_schema) {
-                                // Handle format-based types FIRST (prefer format over type analysis)
-                                if (arg.type_schema.format) {
-                                  type = arg.type_schema.format; // e.g., "int8", "uint64"
-                                }
-                                // Handle $ref types (like AccountId, NFTContractMetadata)
-                                else if (arg.type_schema.$ref) {
-                                  // Extract type name from reference
-                                  const refName = arg.type_schema.$ref.split('/').pop();
-                                  if (refName === 'AccountId') {
-                                    type = 'AccountId';
-                                  } else {
-                                    type = refName || 'object';
-                                  }
-                                }
-                                // Handle anyOf types (Optional types like Option<AccountId>)
-                                else if (arg.type_schema.anyOf) {
-                                  // Look for the non-null type in the anyOf array
-                                  const nonNullType = arg.type_schema.anyOf.find((t: any) => t.type !== 'null');
-                                  if (nonNullType) {
-                                    if (nonNullType.$ref) {
-                                      const refName = nonNullType.$ref.split('/').pop();
-                                      type = refName === 'AccountId' ? 'AccountId' : (refName || 'object');
-                                    } else if (nonNullType.type) {
-                                      type = nonNullType.type;
-                                    } else if (nonNullType.format) {
-                                      type = nonNullType.format;
-                                    }
-                                  } else {
-                                    type = 'object'; // fallback for complex anyOf
-                                  }
-                                }
-                                // Handle direct type specification
-                                else if (arg.type_schema.type) {
-                                  if (Array.isArray(arg.type_schema.type)) {
-                                    // Handle union types like ["integer", "null"] or ["string", "null"] or ["boolean", "null"]
-                                    // Check if format exists at the same level (outside the type array)
-                                    if (arg.type_schema.format) {
-                                      type = arg.type_schema.format;
-                                    } else if (arg.type_schema.type.includes('integer')) {
-                                      type = 'integer';
-                                    } else if (arg.type_schema.type.includes('string')) {
-                                      type = 'string';
-                                    } else if (arg.type_schema.type.includes('boolean')) {
-                                      type = 'boolean';
-                                    } else if (arg.type_schema.type.includes('object')) {
-                                      type = 'object';
-                                    } else if (arg.type_schema.type.includes('array')) {
-                                      type = 'array';
-                                    }
-                                  } else {
-                                    // Single type
-                                    if (arg.type_schema.type === 'integer') {
-                                      type = 'integer';
-                                    } else if (arg.type_schema.type === 'string') {
-                                      type = 'string';
-                                    } else if (arg.type_schema.type === 'boolean') {
-                                      type = 'boolean';
-                                    } else if (arg.type_schema.type === 'object') {
-                                      type = 'object';
-                                    } else if (arg.type_schema.type === 'array') {
-                                      type = 'array';
-                                    }
-                                  }
-                                }
-                              }
-
-                              return {
-                                name: arg.name,
-                                type: type
-                              };
-                            });
-                          } else if (func.inputs) {
-                            // Fallback for non-NEAR ABI format
-                            params = func.inputs;
-                          }
-
-                          const paramString = params.map(param => {
-                            return `${param.name}: ${param.type}`;
-                          }).join(', ');
-
-                          let iconBg = 'bg-blue-500/10';
-                          let icon = <Play className="h-4 w-4 text-blue-500" />;
-                          let typeColor = 'text-blue-600';
-                          let typeText = 'call';
-
-                          if (isView) {
-                            iconBg = 'bg-green-500/10';
-                            icon = <Eye className="h-4 w-4 text-green-500" />;
-                            typeColor = 'text-green-600';
-                            typeText = 'view';
-                          } else if (isPayable) {
-                            iconBg = 'bg-yellow-500/10';
-                            icon = <Coins className="h-4 w-4 text-yellow-500" />;
-                            typeColor = 'text-yellow-600';
-                            typeText = 'payable';
-                          }
-
-                          return (
-                            <div key={index} className="flex items-start gap-3 p-3 border rounded-lg bg-muted/30">
-                              <div className={`p-2 ${iconBg} rounded-md`}>
-                                {icon}
-                              </div>
-                              <div className="flex-1 space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-sm font-medium">{func.name}</span>
-                                  <Badge variant="outline" className={`text-xs ${typeColor} border-current`}>
-                                    {typeText}
-                                  </Badge>
-                                </div>
-                                <div className="text-xs text-muted-foreground font-mono">
-                                  {paramString || 'no parameters'}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                        return (
+                          <div key={index} className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
+                            {isView ? (
+                              <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                            ) : isPayable ? (
+                              <Coins className="h-3.5 w-3.5 text-muted-foreground" />
+                            ) : (
+                              <Play className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                            <span className="font-mono text-xs flex-1">{func.name}</span>
+                            <Badge variant="outline" className="text-[10px]">
+                              {isView ? 'view' : isPayable ? 'payable' : 'call'}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                      {functions.length > 4 && (
+                        <p className="text-xs text-center text-muted-foreground">
+                          +{functions.length - 4} more
+                        </p>
+                      )}
                     </div>
-                  </>
+                  </div>
                 );
               }
               return null;
             })()}
 
-
             {/* Deployment Status */}
             {isDeploying && (
               <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <div className="flex-1">
-                  <p className="text-sm">Deploying contract to NEAR Testnet...</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">This may take a few seconds</p>
+                <div>
+                  <p className="text-sm font-medium">
+                    Deploying to NEAR {currentNetwork}...
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {deploymentMode === 'wallet'
+                      ? 'Please confirm in your wallet'
+                      : 'This may take a few seconds'}
+                  </p>
                 </div>
               </div>
             )}
 
             {/* Deployment Success */}
             {deploymentResult?.success && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 p-3 rounded-lg border border-green-500/50 bg-green-500/5">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
                   <CheckCircle className="h-4 w-4 text-green-600" />
-                  <div className="flex-1">
+                  <div>
                     <p className="text-sm font-medium">Deployment Successful</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Contract deployed to NEAR Testnet
+                    <p className="text-xs text-muted-foreground">
+                      Contract deployed to NEAR {currentNetwork}
                     </p>
                   </div>
                 </div>
 
-                <div className="space-y-3 border rounded-lg p-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Contract Address</label>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 font-mono text-sm bg-muted/50 px-3 py-2 rounded border">
-                        {deploymentResult.contract_id}
+                <div className="space-y-2 p-3 border rounded-lg">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Contract Address</label>
+                    <div className="flex items-center gap-1">
+                      <code className="flex-1 font-mono text-xs bg-muted px-2 py-1.5 rounded border truncate">
+                        {getContractId()}
                       </code>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleCopy(deploymentResult.contract_id, 'address')}
+                        className="h-7 w-7"
+                        onClick={() => handleCopy(getContractId(), 'address')}
                       >
                         {copiedField === 'address' ? (
                           <CheckCircle className="h-3.5 w-3.5 text-green-500" />
@@ -467,25 +681,30 @@ export function DeployDialog({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
-                        onClick={() => window.open(getExplorerAccountUrl(deploymentResult.contract_id), '_blank')}
+                        className="h-7 w-7"
+                        onClick={() => {
+                          const url = deploymentMode === 'wallet'
+                            ? getWalletExplorerAccountUrl(getContractId(), network)
+                            : getExplorerAccountUrl(getContractId());
+                          window.open(url, '_blank');
+                        }}
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Transaction Hash</label>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 font-mono text-sm bg-muted/50 px-3 py-2 rounded border truncate">
-                        {deploymentResult.transaction_hash}
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Transaction Hash</label>
+                    <div className="flex items-center gap-1">
+                      <code className="flex-1 font-mono text-xs bg-muted px-2 py-1.5 rounded border truncate">
+                        {getTransactionHash()}
                       </code>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleCopy(deploymentResult.transaction_hash, 'tx')}
+                        className="h-7 w-7"
+                        onClick={() => handleCopy(getTransactionHash(), 'tx')}
                       >
                         {copiedField === 'tx' ? (
                           <CheckCircle className="h-3.5 w-3.5 text-green-500" />
@@ -496,40 +715,22 @@ export function DeployDialog({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
-                        onClick={() => window.open(deploymentResult.explorer_url, '_blank')}
+                        className="h-7 w-7"
+                        onClick={() => window.open(getExplorerUrl(), '_blank')}
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
-
-                  {/* Additional Details - Clean grid */}
-                  {(deploymentResult.gas_used || deploymentResult.details?.block_height) && (
-                    <div className="grid grid-cols-2 gap-3 pt-3 border-t">
-                      {deploymentResult.gas_used && (
-                        <div>
-                          <span className="text-xs text-muted-foreground">Gas Used</span>
-                          <div className="font-mono text-sm mt-1">{deploymentResult.gas_used}</div>
-                        </div>
-                      )}
-                      {deploymentResult.details?.block_height && (
-                        <div>
-                          <span className="text-xs text-muted-foreground">Block Height</span>
-                          <div className="font-mono text-sm mt-1">{deploymentResult.details.block_height}</div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
 
             {/* Deployment Error */}
             {deploymentError && (
-              <div className="flex items-start gap-2 p-3 rounded-lg border border-red-500/50 bg-red-500/5">
-                <AlertCircle className="h-4 w-4 text-red-500 mt-0.5" />
-                <div className="flex-1">
+              <div className="flex items-start gap-2 p-3 rounded-lg border border-destructive/30 bg-destructive/5">
+                <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
+                <div>
                   <p className="text-sm font-medium">Deployment Failed</p>
                   <p className="text-xs text-muted-foreground mt-1">{deploymentError}</p>
                 </div>
@@ -543,13 +744,14 @@ export function DeployDialog({
             <>
               <Button
                 variant="outline"
-                onClick={() => {
-                  onOpenChange(false);
-                }}
-                className="gap-2"
+                onClick={() => setShowVerificationModal(true)}
               >
-                <PlayCircle className="h-4 w-4" />
-                View Contract Interface
+                <Shield className="h-4 w-4 mr-2" />
+                Verify Source
+              </Button>
+              <Button onClick={() => onOpenChange(false)}>
+                <PlayCircle className="h-4 w-4 mr-2" />
+                View Contract
               </Button>
             </>
           ) : deploymentError ? (
@@ -557,11 +759,8 @@ export function DeployDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button
-                onClick={handleDeploy}
-                className="gap-2"
-              >
-                <RocketIcon className="h-4 w-4" />
+              <Button onClick={handleDeploy}>
+                <RocketIcon className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
             </>
@@ -572,17 +771,20 @@ export function DeployDialog({
               </Button>
               <Button
                 onClick={handleDeploy}
-                disabled={isDeploying || showABIError}
-                className="gap-2"
+                disabled={
+                  isDeploying ||
+                  showABIError ||
+                  (deploymentMode === 'wallet' && !isConnected)
+                }
               >
                 {isDeploying ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Deploying...
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {deploymentMode === 'wallet' ? 'Confirm in Wallet...' : 'Deploying...'}
                   </>
                 ) : (
                   <>
-                    <RocketIcon className="h-4 w-4" />
+                    <RocketIcon className="h-4 w-4 mr-2" />
                     Deploy
                   </>
                 )}
@@ -591,6 +793,18 @@ export function DeployDialog({
           )}
         </DialogFooter>
       </DialogContent>
+
+      {/* Verification Modal */}
+      {user && deploymentResult?.success && (
+        <VerificationModal
+          open={showVerificationModal}
+          onOpenChange={setShowVerificationModal}
+          userId={user.id}
+          projectId={projectId}
+          contractId={getContractId()}
+          network={deploymentMode === 'wallet' ? network : 'testnet'}
+        />
+      )}
     </Dialog>
   );
 }

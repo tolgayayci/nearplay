@@ -67,6 +67,13 @@ export interface Deployment {
   created_at: string;
 }
 
+export interface DeploymentWithProject extends Deployment {
+  project?: {
+    id: string;
+    name: string;
+  };
+}
+
 export interface ABIMethod {
   name: string;
   kind: 'view' | 'call';
@@ -250,4 +257,210 @@ export interface CrateSearchResponse {
 
 export interface CrateVersionsResponse {
   versions: CrateVersion[];
+}
+
+// Faucet types
+
+export interface FaucetRequest {
+  id: string;
+  user_id: string;
+  recipient_account: string;
+  amount: number;
+  status: 'pending' | 'success' | 'failed';
+  transaction_hash?: string;
+  error_message?: string;
+  created_at: string;
+}
+
+export interface FaucetStatusResponse {
+  can_request: boolean;
+  last_request_at?: string;
+  next_available_at?: string;
+  faucet_balance?: number;
+}
+
+export interface FaucetRequestResponse {
+  success: boolean;
+  transaction_hash?: string;
+  explorer_url?: string;
+  error?: string;
+  next_available_at?: string;
+}
+
+// ============================================
+// Template Marketplace Types
+// ============================================
+
+export type TemplateSourceType = 'github' | 'project';  // No standalone - code stored in backend
+export type TemplateDifficulty = 'Beginner' | 'Intermediate' | 'Advanced';
+
+export interface Template {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string;
+
+  // Source (code stored in backend template-storage/{template_id}/)
+  source_type: TemplateSourceType;
+  storage_path?: string;  // Backend storage path
+  github_url?: string;
+  github_owner?: string;
+  github_repo?: string;
+  github_branch?: string;
+  github_path?: string;
+  source_project_id?: string;
+
+  // Metadata
+  category: string;
+  difficulty: TemplateDifficulty;
+  tags: string[];
+  icon: string;
+
+  // Social
+  likes_count: number;
+  uses_count: number;
+  view_count: number;
+
+  // Status
+  is_official: boolean;
+  is_published: boolean;
+  is_featured: boolean;
+
+  // Timestamps
+  created_at: string;
+  updated_at: string;
+  published_at?: string;
+
+  // Joined data
+  author?: {
+    id: string;
+    email: string;
+    name?: string;
+    avatar_url?: string;
+  };
+  user_has_liked?: boolean;
+}
+
+// Generic like (works for templates, projects, etc.)
+export interface Like {
+  id: string;
+  user_id: string;
+  target_type: 'template' | 'project' | 'embed';
+  target_id: string;
+  created_at: string;
+}
+
+export interface TemplateFilters {
+  search?: string;
+  category?: string;
+  difficulty?: TemplateDifficulty;
+  tags?: string[];
+  sortBy?: 'newest' | 'popular' | 'most_used' | 'most_liked';
+  official?: boolean;
+  featured?: boolean;
+}
+
+export interface CreateTemplateInput {
+  name: string;
+  description?: string;
+  source_type: TemplateSourceType;
+  github_url?: string;  // For github source
+  github_branch?: string;
+  github_path?: string;
+  source_project_id?: string;  // For project source
+  category?: string;
+  difficulty?: TemplateDifficulty;
+  tags?: string[];
+  icon?: string;
+  is_published?: boolean;
+}
+
+export interface UpdateTemplateInput {
+  name?: string;
+  description?: string;
+  github_url?: string;
+  category?: string;
+  difficulty?: TemplateDifficulty;
+  tags?: string[];
+  icon?: string;
+  is_published?: boolean;
+}
+
+// ============================================
+// Embed System Types
+// ============================================
+
+export type EmbedSourceType = 'template' | 'project' | 'github';
+export type EmbedButtonStyle = 'primary' | 'secondary' | 'outline' | 'ghost';
+export type EmbedButtonSize = 'sm' | 'default' | 'lg';
+export type EmbedTheme = 'auto' | 'light' | 'dark';
+
+export interface Embed {
+  id: string;
+  user_id: string;
+
+  // Source
+  source_type: EmbedSourceType;
+  template_id?: string;
+  project_id?: string;
+  github_url?: string;
+
+  // Customization
+  button_text: string;
+  button_style: EmbedButtonStyle;
+  button_size: EmbedButtonSize;
+  theme: EmbedTheme;
+
+  // Tracking
+  click_count: number;
+  view_count: number;
+
+  // Metadata
+  name?: string;
+  created_at: string;
+  updated_at: string;
+
+  // Snapshot data (for project embeds)
+  code?: string;
+  snapshot_name?: string;
+  snapshot_description?: string;
+
+  // Joined data
+  template?: Template;
+  project?: Project;
+  author?: {
+    id: string;
+    email: string;
+    name?: string;
+    avatar_url?: string;
+  };
+}
+
+export interface EmbedClick {
+  id: string;
+  embed_id: string;
+  referrer?: string;
+  user_agent?: string;
+  ip_hash?: string;
+  created_at: string;
+}
+
+export interface CreateEmbedInput {
+  source_type: EmbedSourceType;
+  template_id?: string;
+  project_id?: string;
+  github_url?: string;
+  button_text?: string;
+  button_style?: EmbedButtonStyle;
+  button_size?: EmbedButtonSize;
+  theme?: EmbedTheme;
+  name?: string;
+}
+
+export interface UpdateEmbedInput {
+  button_text?: string;
+  button_style?: EmbedButtonStyle;
+  button_size?: EmbedButtonSize;
+  theme?: EmbedTheme;
+  name?: string;
 }

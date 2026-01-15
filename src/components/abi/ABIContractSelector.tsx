@@ -25,6 +25,8 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { getExplorerAccountUrl } from '@/lib/config';
+import { DeploymentInfoBar } from './DeploymentInfoBar';
+import { VerificationModal } from '@/components/verification/VerificationModal';
 
 interface ABIContractSelectorProps {
   contractAddress: string;
@@ -32,17 +34,35 @@ interface ABIContractSelectorProps {
   error?: string | null;
   deployments: Deployment[];
   isLoading?: boolean;
+  userId?: string;
+  projectId?: string;
+  isSharedView?: boolean;
 }
 
-export function ABIContractSelector({ 
-  contractAddress, 
+export function ABIContractSelector({
+  contractAddress,
   onAddressChange,
   error,
   deployments,
-  isLoading
+  isLoading,
+  userId,
+  projectId,
+  isSharedView = false,
 }: ABIContractSelectorProps) {
   const { toast } = useToast();
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationRefreshKey, setVerificationRefreshKey] = useState(0);
   const selectedDeployment = deployments.find(d => d.contract_address === contractAddress);
+
+  // Callback when verification modal closes - refresh verification status
+  const handleVerificationComplete = () => {
+    setVerificationRefreshKey(prev => prev + 1);
+  };
+
+  // Determine network from deployment
+  const network: 'testnet' | 'mainnet' = selectedDeployment?.chain_name?.toLowerCase().includes('mainnet')
+    ? 'mainnet'
+    : 'testnet';
 
   const formatDeploymentTime = (dateString: string) => {
     try {
@@ -174,8 +194,36 @@ export function ABIContractSelector({
               {error}
             </p>
           )}
+
+          {/* Deployment Info Bar */}
+          {selectedDeployment && (
+            <div className="pt-3 mt-3 border-t">
+              <DeploymentInfoBar
+                deployment={selectedDeployment}
+                refreshKey={verificationRefreshKey}
+                onVerifyClick={
+                  !isSharedView && userId && projectId
+                    ? () => setShowVerificationModal(true)
+                    : undefined
+                }
+              />
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Verification Modal */}
+      {userId && projectId && selectedDeployment && (
+        <VerificationModal
+          open={showVerificationModal}
+          onOpenChange={setShowVerificationModal}
+          userId={userId}
+          projectId={projectId}
+          contractId={selectedDeployment.contract_address}
+          network={network}
+          onVerificationComplete={handleVerificationComplete}
+        />
+      )}
     </>
   );
 }

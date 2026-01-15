@@ -12,6 +12,7 @@ pub struct DeployRequest {
     pub user_id: String,
     pub project_id: String,
     pub account_id: Option<String>,
+    pub rpc_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -65,6 +66,7 @@ pub struct DeployResponse {
     pub gas_used: Option<String>,
     pub proof_tx_hash: Option<String>,
     pub details: DeployDetails,
+    pub github_repo_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -194,4 +196,175 @@ impl<T> ApiResponse<T> {
             error: Some(ApiError { code, message, details }),
         }
     }
+}
+
+// Verification API models
+#[derive(Debug, Deserialize)]
+pub struct VerificationPackageRequest {
+    pub user_id: String,
+    pub project_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VerificationMetadataRequest {
+    pub user_id: String,
+    pub project_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerificationPackageResponse {
+    pub zip_base64: String,
+    pub file_count: usize,
+    pub total_size: usize,
+}
+
+// Source publishing API models
+#[derive(Debug, Deserialize)]
+pub struct PublishSourceRequest {
+    pub user_id: String,
+    pub project_id: String,
+    pub contract_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PublishSourceResponse {
+    pub repo_url: String,
+    pub repo_name: String,
+}
+
+// Verification status API models
+#[derive(Debug, Deserialize)]
+pub struct VerificationStatusQuery {
+    pub contract_id: String,
+    pub network: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerificationStatusResponse {
+    pub verified: bool,
+    pub verification_date: Option<String>,
+}
+
+// GitHub clone API models
+#[derive(Debug, Deserialize)]
+pub struct GitHubCloneRequest {
+    pub user_id: String,
+    pub project_id: String,
+    pub repo_url: String,
+    pub branch: Option<String>,
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitHubCloneResponse {
+    pub success: bool,
+    pub files_count: usize,
+    pub message: String,
+    pub main_code: Option<String>,
+}
+
+// Project export API models
+#[derive(Debug, Deserialize)]
+pub struct ProjectExportQuery {
+    pub user_id: String,
+    pub project_id: String,
+}
+
+// Faucet API models
+#[derive(Debug, Deserialize)]
+pub struct FaucetRequest {
+    pub user_id: String,
+    pub recipient_account: String,
+    pub turnstile_token: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FaucetResponse {
+    pub success: bool,
+    pub transaction_hash: Option<String>,
+    pub explorer_url: Option<String>,
+    pub error: Option<String>,
+    pub next_available_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FaucetStatusQuery {
+    pub user_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FaucetStatusResponse {
+    pub can_request: bool,
+    pub last_request_at: Option<String>,
+    pub next_available_at: Option<String>,
+    pub faucet_balance: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FaucetHistoryQuery {
+    pub user_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FaucetHistoryItem {
+    pub id: String,
+    pub recipient_account: String,
+    pub amount: f64,
+    pub status: String,
+    pub transaction_hash: Option<String>,
+    pub explorer_url: Option<String>,
+    pub error_message: Option<String>,
+    pub created_at: String,
+}
+
+// Template API models
+#[derive(Debug, Deserialize)]
+pub struct TemplateCreateFromGitHubRequest {
+    pub template_id: String,
+    pub github_url: String,
+    pub branch: Option<String>,
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TemplateCreateFromProjectRequest {
+    pub template_id: String,
+    pub user_id: String,
+    pub project_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TemplateUseRequest {
+    pub template_id: String,
+    pub user_id: String,
+    pub new_project_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TemplateFileRequest {
+    pub template_id: String,
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TemplateCreateResponse {
+    pub success: bool,
+    pub storage_path: Option<String>,
+    pub message: String,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TemplateUseResponse {
+    pub success: bool,
+    pub project_path: Option<String>,
+    pub message: String,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TemplateFileResponse {
+    pub path: String,
+    pub content: String,
+    pub size: u64,
 }
