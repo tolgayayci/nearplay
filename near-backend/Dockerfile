@@ -83,6 +83,7 @@ COPY --from=builder /app/base_project /app/base_project
 
 # Create necessary directories with proper permissions
 RUN mkdir -p /app/projects && \
+    mkdir -p /app/template-storage && \
     mkdir -p /home/nearplay/.cargo && \
     mkdir -p /home/nearplay/.rustup && \
     mkdir -p /home/nearplay/.near-credentials && \
@@ -90,7 +91,8 @@ RUN mkdir -p /app/projects && \
     chown -R nearplay:nearplay /app && \
     chown -R nearplay:nearplay /home/nearplay && \
     chown -R nearplay:nearplay /var/log/near-playground && \
-    chmod -R 755 /app/projects
+    chmod -R 755 /app/projects && \
+    chmod -R 755 /app/template-storage
 
 # Copy cargo and rustup to nearplay user
 RUN cp -r /root/.cargo /home/nearplay/ && \

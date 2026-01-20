@@ -10,6 +10,8 @@ services:
     volumes:
       # Persistent storage for user projects
       - near-projects:/app/projects
+      # Persistent storage for templates
+      - template-storage:/app/template-storage
       # Cargo cache for faster builds
       - cargo-cache:/home/nearplay/.cargo
       # Rustup installations
@@ -85,6 +87,8 @@ networks:
 # Volumes for persistent data
 volumes:
   near-projects:
+    driver: local
+  template-storage:
     driver: local
   cargo-cache:
     driver: local
