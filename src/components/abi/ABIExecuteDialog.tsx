@@ -27,6 +27,8 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getExplorerTxUrl, getExplorerAccountUrl } from '@/lib/config';
+import { useRPC } from '@/contexts/RPCContext';
+import { useWallet } from '@/contexts/WalletContext';
 import {
   Tooltip,
   TooltipContent,
@@ -66,6 +68,8 @@ export function ABIExecuteDialog({
   const [isExecuting, setIsExecuting] = useState(false);
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const { toast } = useToast();
+  const { getCurrentRpcUrl } = useRPC();
+  const { network } = useWallet();
 
   const handleInputChange = (name: string, value: string) => {
     setInputs(prev => ({ ...prev, [name]: value }));
@@ -78,8 +82,11 @@ export function ABIExecuteDialog({
     setResult({ status: 'pending' });
 
     try {
-      // Execute NEAR method through backend
-      const response = await executeNearMethod(contractAddress, method, inputs);
+      // Get current RPC URL from context
+      const rpcUrl = getCurrentRpcUrl(network);
+
+      // Execute NEAR method through backend with RPC URL
+      const response = await executeNearMethod(contractAddress, method, inputs, rpcUrl);
 
       if (response.success) {
         const successResult: ExecutionResult = {

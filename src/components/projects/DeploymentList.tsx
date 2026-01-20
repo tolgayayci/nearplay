@@ -4,7 +4,6 @@ import { formatDistanceToNow } from 'date-fns';
 import {
   ExternalLink,
   Copy,
-  MoreVerticalIcon,
   Rocket,
   FolderOpen,
   Play,
@@ -14,14 +13,14 @@ import {
   Zap,
   Clock,
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { DeploymentWithProject } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -79,9 +78,11 @@ export function DeploymentList({
     });
   };
 
-  const truncateAddress = (address: string, chars = 12) => {
-    if (address.length <= chars * 2) return address;
-    return `${address.slice(0, chars)}...${address.slice(-chars)}`;
+  const truncateAddress = (address: string) => {
+    // For NEAR addresses, show less of the start and more of the end
+    // e.g., "abc123...nearplay.testnet" instead of equal truncation
+    if (address.length <= 30) return address;
+    return `${address.slice(0, 6)}...${address.slice(-20)}`;
   };
 
   const getExplorerUrl = (deployment: DeploymentWithProject) => {
@@ -164,19 +165,21 @@ export function DeploymentList({
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b bg-muted/50">
-              <th className="h-12 px-6 text-left text-xs font-medium text-muted-foreground w-[35%]">
+              <th className="h-12 px-6 text-left text-xs font-medium text-muted-foreground w-[30%]">
                 Contract
               </th>
-              <th className="h-12 px-6 text-left text-xs font-medium text-muted-foreground w-[20%]">
+              <th className="h-12 px-6 text-left text-xs font-medium text-muted-foreground w-[18%]">
                 Wallet
               </th>
-              <th className="h-12 px-6 text-left text-xs font-medium text-muted-foreground w-[15%]">
+              <th className="h-12 px-6 text-left text-xs font-medium text-muted-foreground w-[14%]">
                 Network
               </th>
-              <th className="h-12 px-6 text-left text-xs font-medium text-muted-foreground w-[20%]">
+              <th className="h-12 px-6 text-left text-xs font-medium text-muted-foreground w-[18%]">
                 Deployed
               </th>
-              <th className="w-[10%]"></th>
+              <th className="h-12 px-6 text-right text-xs font-medium text-muted-foreground w-[20%]">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -202,10 +205,10 @@ export function DeploymentList({
                       <div className="flex flex-col gap-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <code
-                            className="font-medium font-mono text-sm truncate max-w-[180px]"
+                            className="font-medium font-mono text-sm truncate max-w-[280px]"
                             title={deployment.contract_address}
                           >
-                            {truncateAddress(deployment.contract_address, 10)}
+                            {truncateAddress(deployment.contract_address)}
                           </code>
                           <Button
                             variant="ghost"
@@ -282,51 +285,63 @@ export function DeploymentList({
                   </td>
 
                   {/* Actions */}
-                  <td className="pr-4">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 opacity-0 group-hover:opacity-100"
-                        >
-                          <MoreVerticalIcon className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(getExplorerUrl(deployment), '_blank');
-                          }}
-                        >
-                          <ExternalLink className="mr-2 h-4 w-4" />
-                          View in Explorer
-                        </DropdownMenuItem>
+                  <td className="py-4 px-6">
+                    <TooltipProvider>
+                      <div className="flex items-center justify-end gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(getExplorerUrl(deployment), '_blank');
+                              }}
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>View in Explorer</TooltipContent>
+                        </Tooltip>
                         {deployment.project && (
                           <>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/projects/${deployment.project!.id}`);
-                              }}
-                            >
-                              <FolderOpen className="mr-2 h-4 w-4" />
-                              Open Project
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/projects/${deployment.project!.id}?tab=abi`);
-                              }}
-                            >
-                              <Play className="mr-2 h-4 w-4" />
-                              Call Contract
-                            </DropdownMenuItem>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/projects/${deployment.project!.id}`);
+                                  }}
+                                >
+                                  <FolderOpen className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Open Project</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/projects/${deployment.project!.id}?tab=abi`);
+                                  }}
+                                >
+                                  <Play className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Call Contract</TooltipContent>
+                            </Tooltip>
                           </>
                         )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                      </div>
+                    </TooltipProvider>
                   </td>
                 </tr>
               );

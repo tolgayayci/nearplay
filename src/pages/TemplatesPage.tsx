@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { TemplateGallery } from '@/components/templates/TemplateGallery';
 import { PublishTemplateDialog } from '@/components/templates/PublishTemplateDialog';
@@ -38,6 +38,7 @@ export function TemplatesPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
 
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -45,6 +46,21 @@ export function TemplatesPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Open detail dialog if template ID is in URL
+  useEffect(() => {
+    const templateId = searchParams.get('t');
+    if (templateId && templates.length > 0) {
+      const template = templates.find((t) => t.id === templateId);
+      if (template) {
+        setSelectedTemplate(template);
+        setShowDetailDialog(true);
+        incrementTemplateViews(templateId).catch(console.error);
+      }
+      // Clear the query param
+      setSearchParams({});
+    }
+  }, [searchParams, templates]);
 
   // Fetch user's liked templates when logged in
   useEffect(() => {
@@ -253,6 +269,12 @@ export function TemplatesPage() {
       <PublishTemplateDialog
         open={showPublishDialog}
         onOpenChange={setShowPublishDialog}
+        onSuccess={(template) => {
+          // Add to templates list and show detail dialog
+          setTemplates((prev) => [template, ...prev]);
+          setSelectedTemplate(template);
+          setShowDetailDialog(true);
+        }}
       />
 
       {/* Template Detail Dialog */}

@@ -8,8 +8,8 @@ import {
 } from 'react';
 import { setupWalletSelector, WalletSelector } from '@near-wallet-selector/core';
 import { setupModal, WalletSelectorModal } from '@near-wallet-selector/modal-ui';
-import { setupMyNearWallet } from '@near-wallet-selector/my-near-wallet';
-import { setupNightly } from '@near-wallet-selector/nightly';
+import { setupMeteorWallet } from '@near-wallet-selector/meteor-wallet';
+import { setupHotWallet } from '@near-wallet-selector/hot-wallet';
 import { useRPC } from './RPCContext';
 
 // Import wallet selector CSS
@@ -119,21 +119,18 @@ export function WalletProvider({ children }: WalletProviderProps) {
       try {
         const rpcUrl = getCurrentRpcUrl(network);
 
+        // Configure supported NEAR wallets
+        const walletModules = [
+          setupMeteorWallet(),
+          setupHotWallet(),
+        ];
+
         const newSelector = await setupWalletSelector({
           network: {
             networkId: network,
             nodeUrl: rpcUrl,
           },
-          modules: [
-            setupNightly(),
-            setupMyNearWallet({
-              walletUrl: network === 'mainnet'
-                ? 'https://app.mynearwallet.com'
-                : 'https://testnet.mynearwallet.com',
-              successUrl: window.location.origin + window.location.pathname,
-              failureUrl: window.location.origin + window.location.pathname,
-            }),
-          ],
+          modules: walletModules,
         });
 
         if (!mounted) return;
@@ -306,4 +303,16 @@ export function formatNearAmount(yoctoNear: string): string {
   const remainder = BigInt(yoctoNear) % BigInt('1000000000000000000000000');
   const decimal = remainder.toString().padStart(24, '0').slice(0, 4);
   return `${near}.${decimal}`;
+}
+
+// Wallet display names mapping
+const WALLET_DISPLAY_NAMES: Record<string, string> = {
+  'meteor-wallet': 'Meteor Wallet',
+  'hot-wallet': 'HOT Wallet',
+};
+
+// Utility function to get wallet display name
+export function getWalletDisplayName(walletId: string | null): string {
+  if (!walletId) return 'Wallet';
+  return WALLET_DISPLAY_NAMES[walletId] || walletId;
 }

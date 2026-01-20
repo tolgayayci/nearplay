@@ -36,6 +36,8 @@ interface EditorProps {
   onSelectFile?: (path: string) => void;
   onCloseFile?: (path: string) => void;
   onCloseAllFiles?: () => void;
+  // Jump to line (from search results)
+  goToLine?: number | null;
 }
 
 export function Editor({
@@ -59,6 +61,7 @@ export function Editor({
   onSelectFile,
   onCloseFile,
   onCloseAllFiles,
+  goToLine,
 }: EditorProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [showDeployDialog, setShowDeployDialog] = useState(false);
@@ -175,6 +178,37 @@ export function Editor({
       defineEditorTheme(monacoRef.current, effectiveTheme === 'dark');
     }
   }, [effectiveTheme]);
+
+  // Jump to line when goToLine changes
+  useEffect(() => {
+    if (goToLine && editorRef.current && monacoRef.current) {
+      // Small delay to ensure editor is ready
+      setTimeout(() => {
+        const editor = editorRef.current;
+        // Scroll to line and center it
+        editor.revealLineInCenter(goToLine);
+        // Set cursor position
+        editor.setPosition({ lineNumber: goToLine, column: 1 });
+        // Highlight the line briefly
+        const decorations = editor.deltaDecorations([], [
+          {
+            range: new monacoRef.current.Range(goToLine, 1, goToLine, 1),
+            options: {
+              isWholeLine: true,
+              className: 'search-highlight-line',
+              glyphMarginClassName: 'search-highlight-glyph',
+            },
+          },
+        ]);
+        // Remove highlight after 2 seconds
+        setTimeout(() => {
+          editor.deltaDecorations(decorations, []);
+        }, 2000);
+        // Focus the editor
+        editor.focus();
+      }, 100);
+    }
+  }, [goToLine, activeFilePath]);
 
   return (
     <div className="h-full flex flex-col bg-background border rounded-md overflow-hidden">

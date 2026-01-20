@@ -66,3 +66,9 @@ export function formatNearAmount(amount: string): string {
   const nearAmount = parseFloat(amount) / Math.pow(10, 24);
   return nearAmount.toFixed(4);
 }
+
+// Helper function to get RPC URL with fallback to official
+export function getRpcUrl(network: Network, customUrl?: string): string {
+  if (customUrl) return customUrl;
+  return NEAR_CONFIG[network].nodeUrl; // Fallback to official NEAR RPC
+}

@@ -10,7 +10,6 @@ import {
   Pencil,
   Check,
   X,
-  Share2,
   Bug,
   RocketIcon,
   Loader2,
@@ -31,11 +30,11 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ABIView } from "@/components/views/ABIView";
 import { cn } from "@/lib/utils";
 import { SEO } from "@/components/seo/SEO";
-import { ShareProjectDialog } from "@/components/ShareProjectDialog";
 import { DeployDialog } from "@/components/editor/DeployDialog";
 import { Badge } from "@/components/ui/badge";
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { RPCSettingsPanel } from "@/components/settings/RPCSettingsPanel";
+import { RPCDropdown } from "@/components/settings/RPCDropdown";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -76,7 +75,6 @@ export function EditorPage() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
-  const [showShareDialog, setShowShareDialog] = useState(false);
   const [refreshABITrigger, setRefreshABITrigger] = useState(0);
   const [showDeployDialog, setShowDeployDialog] = useState(false);
   const [showABIError, setShowABIError] = useState(false);
@@ -85,6 +83,7 @@ export function EditorPage() {
   const [showTestsModal, setShowTestsModal] = useState(false);
   const [showRPCSettings, setShowRPCSettings] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [goToLine, setGoToLine] = useState<number | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const fileExplorerRef = useRef<FileExplorerRef>(null);
   const hasAutoOpenedRef = useRef(false);
@@ -489,28 +488,6 @@ export function EditorPage() {
     setShowDeployDialog(true);
   };
 
-  // Handle share dialog close and refresh project data
-  const handleShareDialogChange = async (open: boolean) => {
-    setShowShareDialog(open);
-
-    // If dialog is closing, refresh project data to get latest share status
-    if (!open && id) {
-      try {
-        const { data, error } = await supabase
-          .from("projects")
-          .select("*")
-          .eq("id", id)
-          .single();
-
-        if (error) throw error;
-        if (data) {
-          setProject((prev) => (prev ? { ...prev, ...data } : null));
-        }
-      } catch (error) {
-        console.error("Error refreshing project:", error);
-      }
-    }
-  };
 
   const handleReportIssue = () => {
     window.open(
@@ -541,8 +518,14 @@ export function EditorPage() {
     }
   };
 
-  const handleFileSelect = useCallback(async (path: string) => {
+  const handleFileSelect = useCallback(async (path: string, lineNumber?: number) => {
     await openFile(path);
+    // Set line number for editor to jump to (will be cleared after use)
+    if (lineNumber) {
+      setGoToLine(lineNumber);
+    } else {
+      setGoToLine(null);
+    }
   }, [openFile]);
 
   const handleEditorChange = useCallback((value: string) => {
@@ -738,21 +721,8 @@ export function EditorPage() {
                 </Tooltip>
               </TooltipProvider>
 
-              <Button
-                variant="outline"
-                className="h-9 px-3 flex items-center gap-2"
-                onClick={() => handleShareDialogChange(true)}
-              >
-                <div
-                  className={cn(
-                    "h-2 w-2 rounded-full",
-                    project?.is_public ? "bg-green-500" : "bg-red-500"
-                  )}
-                />
-                <Share2 className="h-[1.2rem] w-[1.2rem]" />
-              </Button>
-
-              <WalletButton onOpenRPCSettings={() => setShowRPCSettings(true)} />
+              <RPCDropdown onOpenSettings={() => setShowRPCSettings(true)} />
+              <WalletButton />
               <ThemeToggle />
               <UserNav />
             </div>
@@ -762,13 +732,6 @@ export function EditorPage() {
 
       {project && (
         <>
-          <ShareProjectDialog
-            open={showShareDialog}
-            onOpenChange={handleShareDialogChange}
-            projectId={project.id}
-            projectName={project.name}
-          />
-
           {lastCompilationResult && (
             <DeployDialog
               open={showDeployDialog}
@@ -849,6 +812,7 @@ export function EditorPage() {
                           onSelectFile={setActiveFile}
                           onCloseFile={closeFile}
                           onCloseAllFiles={closeAllFiles}
+                          goToLine={goToLine}
                         />
                       ) : (
                         <div className="h-full flex flex-col bg-background border rounded-md overflow-hidden">

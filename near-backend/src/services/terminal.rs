@@ -2,11 +2,19 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{mpsc, RwLock};
+use tokio::time::timeout;
 use chrono::{DateTime, Utc};
 use anyhow::{Result, anyhow};
+
+/// Command timeout duration (5 minutes)
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Default RPC URL to use when none is provided
+const DEFAULT_TESTNET_RPC_URL: &str = "https://rpc.testnet.near.org";
 
 /// Message types for terminal WebSocket communication
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -16,6 +24,8 @@ pub enum TerminalMessage {
     Command {
         command: String,
         session_id: String,
+        #[serde(default)]
+        rpc_url: Option<String>,
     },
     #[serde(rename = "output")]
     Output {
@@ -105,16 +115,40 @@ impl TerminalService {
             "wget", "curl", // Prevent arbitrary downloads
             "ssh", "scp", "nc", "netcat", // Network tools
             "kill", "killall", "pkill", // Process management
+            "rustup", // Prevent modifying system toolchain
         ];
 
         if forbidden.contains(&cmd) {
             return Err(anyhow!("Command '{}' is not allowed", cmd));
         }
 
-        // Check for shell escape attempts
+        // Check for forbidden subcommands
+        if cmd == "cargo" && parts.len() > 1 {
+            let subcommand = parts[1];
+            let forbidden_cargo_subcommands = ["run", "install", "publish"];
+            if forbidden_cargo_subcommands.contains(&subcommand) {
+                return Err(anyhow!("'cargo {}' is not allowed in the web terminal", subcommand));
+            }
+        }
+
+        if cmd == "near" && parts.len() > 1 {
+            let subcommand = parts[1];
+            let forbidden_near_subcommands = ["login", "delete", "deploy"];
+            if forbidden_near_subcommands.contains(&subcommand) {
+                return Err(anyhow!("'near {}' is not allowed. Use the Deploy button for deployments.", subcommand));
+            }
+        }
+
+        // Check for shell escape attempts and redirects
         if command.contains(';') || command.contains('|') || command.contains('`') ||
-           command.contains("$(") || command.contains("&&") || command.contains("||") {
-            return Err(anyhow!("Shell operators are not allowed"));
+           command.contains("$(") || command.contains("&&") || command.contains("||") ||
+           command.contains('>') || command.contains('<') {
+            return Err(anyhow!("Shell operators and redirects are not allowed"));
+        }
+
+        // Check for background execution
+        if command.trim().ends_with('&') {
+            return Err(anyhow!("Background execution is not allowed"));
         }
 
         // Check for path traversal
@@ -153,6 +187,7 @@ impl TerminalService {
         user_id: &str,
         project_id: &str,
         command: &str,
+        rpc_url: Option<&str>,
         output_tx: mpsc::Sender<TerminalMessage>,
     ) -> Result<i32> {
         // Validate command
@@ -161,16 +196,21 @@ impl TerminalService {
         // Get working directory
         let working_dir = self.get_or_create_session(session_id, user_id, project_id).await?;
 
-        log::info!("Executing command '{}' in {:?}", command, working_dir);
+        // Use provided RPC URL or fallback to default
+        let effective_rpc_url = rpc_url.unwrap_or(DEFAULT_TESTNET_RPC_URL);
+
+        log::info!("Executing command '{}' in {:?} with RPC URL: {}", command, working_dir, effective_rpc_url);
 
         // Parse command
         let parts: Vec<&str> = command.split_whitespace().collect();
         let (cmd, args) = parts.split_first().ok_or_else(|| anyhow!("Empty command"))?;
 
-        // Create process
+        // Create process with RPC environment variable for NEAR CLI
         let mut child = Command::new(cmd)
             .args(args)
             .current_dir(&working_dir)
+            .env("NEAR_RPC_URL", effective_rpc_url)
+            .env("NEAR_CLI_TESTNET_RPC_SERVER_URL", effective_rpc_url)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -204,14 +244,28 @@ impl TerminalService {
             }
         });
 
-        // Wait for process to complete
-        let status = child.wait().await?;
+        // Wait for process to complete with timeout
+        let exit_code = match timeout(COMMAND_TIMEOUT, child.wait()).await {
+            Ok(Ok(status)) => status.code().unwrap_or(-1),
+            Ok(Err(e)) => {
+                let _ = output_tx.send(TerminalMessage::Error {
+                    message: format!("Process error: {}", e),
+                }).await;
+                -1
+            }
+            Err(_) => {
+                // Timeout - kill the process
+                let _ = child.kill().await;
+                let _ = output_tx.send(TerminalMessage::Error {
+                    message: "Command timed out after 5 minutes".to_string(),
+                }).await;
+                -1
+            }
+        };
 
         // Wait for output streams to finish
         let _ = stdout_handle.await;
         let _ = stderr_handle.await;
-
-        let exit_code = status.code().unwrap_or(-1);
 
         // Send exit message
         let _ = output_tx.send(TerminalMessage::Exit { code: exit_code }).await;

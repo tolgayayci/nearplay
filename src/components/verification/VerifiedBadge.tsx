@@ -1,4 +1,3 @@
-import React, { useEffect, useState } from 'react';
 import {
   Tooltip,
   TooltipContent,
@@ -6,49 +5,26 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Shield, ShieldOff, Loader2, ExternalLink } from 'lucide-react';
+import { CheckCircle2, Shield, ShieldOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { checkVerificationStatus, type VerificationStatus } from '@/lib/verification';
 
 interface VerifiedBadgeProps {
-  contractId: string;
-  network?: 'testnet' | 'mainnet';
+  verified?: boolean;
+  verifiedAt?: string;
+  wasmHash?: string;
   className?: string;
   showLabel?: boolean;
   size?: 'sm' | 'md' | 'lg';
 }
 
 export function VerifiedBadge({
-  contractId,
-  network = 'testnet',
+  verified = false,
+  verifiedAt,
+  wasmHash,
   className,
   showLabel = true,
   size = 'md',
 }: VerifiedBadgeProps) {
-  const [status, setStatus] = useState<VerificationStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const checkStatus = async () => {
-      if (!contractId) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        const result = await checkVerificationStatus(contractId, network);
-        setStatus(result);
-      } catch {
-        setStatus({ verified: false });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkStatus();
-  }, [contractId, network]);
-
   const iconSize = {
     sm: 'h-3 w-3',
     md: 'h-4 w-4',
@@ -61,55 +37,40 @@ export function VerifiedBadge({
     lg: 'text-base',
   };
 
-  if (isLoading) {
-    return (
-      <Badge variant="secondary" className={cn('gap-1', className)}>
-        <Loader2 className={cn(iconSize[size], 'animate-spin')} />
-        {showLabel && <span className={textSize[size]}>Checking...</span>}
-      </Badge>
-    );
-  }
-
-  if (!status) {
-    return null;
-  }
-
-  if (status.verified) {
+  if (verified) {
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <a
-              href={status.verification_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex"
+            <Badge
+              variant="default"
+              className={cn(
+                'gap-1 bg-green-600',
+                className
+              )}
             >
-              <Badge
-                variant="default"
-                className={cn(
-                  'gap-1 bg-green-600 hover:bg-green-700 cursor-pointer',
-                  className
-                )}
-              >
-                <CheckCircle2 className={iconSize[size]} />
-                {showLabel && <span className={textSize[size]}>Verified</span>}
-              </Badge>
-            </a>
+              <CheckCircle2 className={iconSize[size]} />
+              {showLabel && <span className={textSize[size]}>Verified</span>}
+            </Badge>
           </TooltipTrigger>
           <TooltipContent>
             <div className="space-y-1">
               <p className="font-medium flex items-center gap-1">
                 <Shield className="h-3.5 w-3.5" />
-                Source Code Verified
+                Verified by NEAR Playground
               </p>
-              {status.verification_date && (
+              {verifiedAt && (
                 <p className="text-xs text-muted-foreground">
-                  Verified on {new Date(status.verification_date).toLocaleDateString()}
+                  Verified on {new Date(verifiedAt).toLocaleDateString()}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                Click to view on SourceScan <ExternalLink className="h-3 w-3" />
+              {wasmHash && (
+                <p className="text-xs text-muted-foreground font-mono truncate max-w-[250px]">
+                  {wasmHash}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Bytecode matches the deployed contract
               </p>
             </div>
           </TooltipContent>
@@ -133,7 +94,7 @@ export function VerifiedBadge({
         <TooltipContent>
           <p className="text-sm">Source code not verified</p>
           <p className="text-xs text-muted-foreground">
-            Verify your contract to show source code on-chain
+            Click "Verify Source" to verify your contract
           </p>
         </TooltipContent>
       </Tooltip>
@@ -141,33 +102,14 @@ export function VerifiedBadge({
   );
 }
 
-// Inline badge version for compact display
+// Inline icon version for compact display
 export function VerifiedIcon({
-  contractId,
-  network = 'testnet',
+  verified = false,
   className,
 }: {
-  contractId: string;
-  network?: 'testnet' | 'mainnet';
+  verified?: boolean;
   className?: string;
 }) {
-  const [verified, setVerified] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const check = async () => {
-      if (!contractId) return;
-      try {
-        const status = await checkVerificationStatus(contractId, network);
-        setVerified(status.verified);
-      } catch {
-        setVerified(false);
-      }
-    };
-    check();
-  }, [contractId, network]);
-
-  if (verified === null) return null;
-
   return (
     <TooltipProvider>
       <Tooltip>
@@ -181,7 +123,7 @@ export function VerifiedIcon({
           </span>
         </TooltipTrigger>
         <TooltipContent>
-          {verified ? 'Source code verified' : 'Source code not verified'}
+          {verified ? 'Source code verified by NEAR Playground' : 'Source code not verified'}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

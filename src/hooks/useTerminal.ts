@@ -4,6 +4,7 @@ interface TerminalMessage {
   type: 'command' | 'output' | 'exit' | 'error' | 'ready';
   command?: string;
   session_id?: string;
+  rpc_url?: string;
   data?: string;
   stream?: string;
   code?: number;
@@ -25,7 +26,7 @@ interface UseTerminalReturn {
   isConnecting: boolean;
   connect: () => void;
   disconnect: () => void;
-  sendCommand: (command: string) => void;
+  sendCommand: (command: string, rpcUrl?: string) => void;
   error: string | null;
 }
 
@@ -169,7 +170,7 @@ export function useTerminal({
     setIsConnecting(false);
   }, []);
 
-  const sendCommand = useCallback((command: string) => {
+  const sendCommand = useCallback((command: string, rpcUrl?: string) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) {
       setError('Not connected');
       return;
@@ -179,6 +180,7 @@ export function useTerminal({
       type: 'command',
       command,
       session_id: `${userId}-${projectId}`,
+      rpc_url: rpcUrl,
     };
 
     wsRef.current.send(JSON.stringify(message));

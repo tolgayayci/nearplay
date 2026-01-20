@@ -12,6 +12,7 @@ use crate::models::{
     VerificationPackageRequest, VerificationMetadataRequest, VerificationPackageResponse,
     PublishSourceRequest, PublishSourceResponse,
     VerificationStatusQuery, VerificationStatusResponse,
+    VerifyContractRequest, VerifyContractResponse,
     GitHubCloneRequest, GitHubCloneResponse,
     FaucetRequest, FaucetResponse, FaucetStatusQuery, FaucetStatusResponse,
     FaucetHistoryQuery, FaucetHistoryItem,
@@ -19,10 +20,10 @@ use crate::models::{
 use crate::services::{
     compilation::compile_contract,
     deployment::deploy_contract,
-    faucet::{verify_turnstile_token, check_account_exists, transfer_near, get_faucet_balance},
+    faucet::{check_account_exists, transfer_near, get_faucet_balance, check_rate_limit, get_faucet_history},
     method_call::call_contract_method,
     filesystem::{FileSystemService, FileNode, FileContent},
-    verification::{VerificationService, ProjectMetadata},
+    verification::{VerificationService, ProjectMetadata, get_onchain_hash},
     github::GitHubService,
 };
 
@@ -105,6 +106,7 @@ pub async fn method_call_handler(req: web::Json<MethodCallRequest>) -> Result<Ht
         &req.method_name,
         &req.args,
         &req.method_type,
+        req.rpc_url.as_deref(),
     ).await {
         Ok(call_result) => {
             info!(
@@ -584,53 +586,49 @@ pub async fn check_verification_status_handler(
 
     info!("Checking verification status for contract: {} on {}", contract_id, network);
 
-    let base_url = if network == "mainnet" {
-        "https://api.sourcescan.dev"
-    } else {
-        "https://api.testnet.sourcescan.dev"
-    };
+    // Verification status is stored in frontend (Supabase)
+    // This endpoint just returns not verified - frontend checks its own data
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        VerificationStatusResponse {
+            verified: false,
+            verification_date: None,
+        },
+        "Check frontend for verification status".to_string(),
+    )))
+}
 
-    let client = reqwest::Client::new();
-    let url = format!("{}/api/contracts/{}", base_url, contract_id);
+/// Get on-chain bytecode hash for a contract
+/// Frontend compares this with stored compiled hash
+pub async fn verify_contract_handler(
+    req: web::Json<VerifyContractRequest>,
+) -> Result<HttpResponse> {
+    let contract_id = &req.contract_id;
+    let network = req.network.as_deref().unwrap_or("testnet");
 
-    match client.get(&url).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            match resp.json::<serde_json::Value>().await {
-                Ok(data) => {
-                    let verified = data["verified"].as_bool().unwrap_or(false);
-                    let verification_date = data["verified_at"].as_str().map(String::from);
+    info!("Fetching on-chain hash for contract: {} on {}", contract_id, network);
 
-                    info!("Contract {} verification status: {}", contract_id, verified);
-
-                    Ok(HttpResponse::Ok().json(ApiResponse::success(
-                        VerificationStatusResponse {
-                            verified,
-                            verification_date,
-                        },
-                        "Status retrieved".to_string(),
-                    )))
-                }
-                Err(e) => {
-                    warn!("Failed to parse SourceScan response: {}", e);
-                    Ok(HttpResponse::Ok().json(ApiResponse::success(
-                        VerificationStatusResponse {
-                            verified: false,
-                            verification_date: None,
-                        },
-                        "Contract not verified".to_string(),
-                    )))
-                }
-            }
-        }
-        Ok(_) | Err(_) => {
-            // Contract not found or API error - treat as not verified
+    match get_onchain_hash(contract_id, network).await {
+        Ok(onchain_hash) => {
+            info!("Retrieved on-chain hash for {}: {}", contract_id, onchain_hash);
             Ok(HttpResponse::Ok().json(ApiResponse::success(
-                VerificationStatusResponse {
-                    verified: false,
-                    verification_date: None,
+                VerifyContractResponse {
+                    verified: false, // Frontend will determine this
+                    compiled_hash: String::new(), // Frontend has this
+                    onchain_hash,
+                    verified_at: None,
                 },
-                "Contract not verified".to_string(),
+                "On-chain hash retrieved".to_string(),
             )))
+        }
+        Err(e) => {
+            error!("Failed to get on-chain hash for contract {}: {}", contract_id, e);
+            Ok(HttpResponse::BadRequest().json(
+                ApiResponse::<VerifyContractResponse>::error(
+                    "VERIFICATION_ERROR".to_string(),
+                    e.to_string(),
+                    None,
+                ),
+            ))
         }
     }
 }
@@ -1081,28 +1079,24 @@ pub async fn faucet_request_handler(
         req.user_id, req.recipient_account
     );
 
-    // 1. Verify Turnstile token
-    match verify_turnstile_token(&req.turnstile_token).await {
-        Ok(valid) => {
-            if !valid {
-                return Ok(HttpResponse::BadRequest().json(
+    // 1. Check rate limit (24 hour limit per user)
+    match check_rate_limit(&req.user_id).await {
+        Ok(rate_limit_info) => {
+            if !rate_limit_info.can_request {
+                let next_available = rate_limit_info.next_available_at.clone().unwrap_or_default();
+                return Ok(HttpResponse::TooManyRequests().json(
                     ApiResponse::<FaucetResponse>::error(
-                        "CAPTCHA_FAILED".to_string(),
-                        "CAPTCHA verification failed".to_string(),
+                        "RATE_LIMITED".to_string(),
+                        format!("You already requested tokens in the last 24 hours. Next request available at: {}", next_available),
                         None,
                     ),
                 ));
             }
         }
         Err(e) => {
-            error!("Turnstile verification error: {}", e);
-            return Ok(HttpResponse::InternalServerError().json(
-                ApiResponse::<FaucetResponse>::error(
-                    "CAPTCHA_ERROR".to_string(),
-                    "Failed to verify CAPTCHA".to_string(),
-                    Some(e.to_string()),
-                ),
-            ));
+            error!("Rate limit check error: {}", e);
+            // If rate limit check fails, allow the request but log warning
+            warn!("Rate limit check failed, allowing request: {}", e);
         }
     }
 
@@ -1206,13 +1200,25 @@ pub async fn faucet_status_handler(
         }
     };
 
-    // For now, always allow requests (rate limiting will be handled by frontend via Supabase)
-    // This can be enhanced later with direct Supabase integration
+    // Check rate limit status for this user
+    let (can_request, last_request_at, next_available_at) = match check_rate_limit(&query.user_id).await {
+        Ok(rate_limit_info) => (
+            rate_limit_info.can_request,
+            rate_limit_info.last_request_at,
+            rate_limit_info.next_available_at,
+        ),
+        Err(e) => {
+            warn!("Failed to check rate limit: {}", e);
+            // Default to allowing if check fails
+            (true, None, None)
+        }
+    };
+
     Ok(HttpResponse::Ok().json(ApiResponse::success(
         FaucetStatusResponse {
-            can_request: true,
-            last_request_at: None,
-            next_available_at: None,
+            can_request,
+            last_request_at,
+            next_available_at,
             faucet_balance: balance,
         },
         "Faucet status retrieved".to_string(),
@@ -1224,12 +1230,23 @@ pub async fn faucet_history_handler(
 ) -> Result<HttpResponse> {
     info!("Faucet history request for user: {}", query.user_id);
 
-    // History is stored in Supabase and queried directly by the frontend
-    // This endpoint can be enhanced later with direct Supabase integration
-    Ok(HttpResponse::Ok().json(ApiResponse::success(
-        Vec::<FaucetHistoryItem>::new(),
-        "Faucet history retrieved".to_string(),
-    )))
+    // Fetch history from Supabase
+    match get_faucet_history(&query.user_id, 10).await {
+        Ok(history) => {
+            Ok(HttpResponse::Ok().json(ApiResponse::success(
+                history,
+                "Faucet history retrieved".to_string(),
+            )))
+        }
+        Err(e) => {
+            warn!("Failed to fetch faucet history: {}", e);
+            // Return empty history on error
+            Ok(HttpResponse::Ok().json(ApiResponse::success(
+                Vec::<FaucetHistoryItem>::new(),
+                "Faucet history retrieved".to_string(),
+            )))
+        }
+    }
 }
 
 // Template storage handlers

@@ -1,0 +1,156 @@
+---
+title: Build Your First Contract
+description: Step-by-step guide to creating a greeting contract
+---
+
+# Build Your First Contract
+
+Let's build a simple "Hello World" greeting contract from scratch.
+
+## What We're Building
+
+A contract that:
+- Stores a greeting message
+- Lets anyone read the greeting
+- Lets the owner change it
+
+## Step 1: Create a New Project
+
+1. Click **New Project**
+2. Select **Empty Project**
+3. Name it "greeting"
+4. Click **Create**
+
+## Step 2: Write the Contract
+
+Replace the template code with:
+
+```rust
+use near_sdk::{near, env};
+
+#[near(contract_state)]
+pub struct Greeting {
+    message: String,
+}
+
+impl Default for Greeting {
+    fn default() -> Self {
+        Self {
+            message: String::from("Hello, NEAR!"),
+        }
+    }
+}
+
+#[near]
+impl Greeting {
+    // View method - free to call
+    pub fn get_greeting(&self) -> String {
+        self.message.clone()
+    }
+
+    // Call method - requires transaction
+    pub fn set_greeting(&mut self, message: String) {
+        let caller = env::predecessor_account_id();
+        env::log_str(&format!("{} set greeting to: {}", caller, message));
+        self.message = message;
+    }
+}
+```
+
+## Step 3: Understand the Code
+
+### Contract State
+
+```rust
+#[near(contract_state)]
+pub struct Greeting {
+    message: String,
+}
+```
+
+The `#[near(contract_state)]` macro marks this struct as the contract's storage.
+
+### Default Values
+
+```rust
+impl Default for Greeting {
+    fn default() -> Self {
+        Self {
+            message: String::from("Hello, NEAR!"),
+        }
+    }
+}
+```
+
+When the contract is first deployed, `message` starts as "Hello, NEAR!".
+
+### View Method
+
+```rust
+pub fn get_greeting(&self) -> String {
+    self.message.clone()
+}
+```
+
+Takes `&self` (immutable reference) - can't modify state, free to call.
+
+### Call Method
+
+```rust
+pub fn set_greeting(&mut self, message: String) {
+    // ...
+    self.message = message;
+}
+```
+
+Takes `&mut self` (mutable reference) - can modify state, costs gas.
+
+## Step 4: Compile
+
+Click **Compile** and wait for the build to complete.
+
+You should see:
+```
+Build successful!
+Contract size: ~50 KB
+ABI methods found: 2
+```
+
+## Step 5: Deploy
+
+1. Click **Deploy**
+2. Keep "Playground" mode selected
+3. Click **Deploy**
+
+Your contract is now live on testnet!
+
+## Step 6: Test It
+
+In the Contract Interface:
+
+1. Click **get_greeting**
+   - Result: `"Hello, NEAR!"`
+
+2. Enter a new message in **set_greeting**
+   - Type: `"Hello from my first contract!"`
+   - Click **set_greeting**
+
+3. Click **get_greeting** again
+   - Result: `"Hello from my first contract!"`
+
+<img src="/images/greeting-test.png" alt="Testing the greeting contract" />
+
+## Congratulations!
+
+You just built and deployed your first NEAR smart contract.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Explore Templates" icon="cube" href="/features/templates">
+    Try the NEP-141 or NEP-171 templates
+  </Card>
+  <Card title="Learn Testing" icon="flask" href="/guides/testing">
+    Write tests for your contracts
+  </Card>
+</CardGroup>

@@ -1,0 +1,129 @@
+---
+title: Testing Contracts
+description: Write and run tests for your smart contracts
+---
+
+# Testing Contracts
+
+NEAR Playground includes a test runner to verify your contract logic.
+
+## Writing Tests
+
+Add tests to your contract file using Rust's `#[test]` attribute:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_greeting() {
+        let contract = Greeting::default();
+        assert_eq!(contract.get_greeting(), "Hello, NEAR!");
+    }
+
+    #[test]
+    fn test_set_greeting() {
+        let mut contract = Greeting::default();
+        contract.set_greeting("New message".to_string());
+        assert_eq!(contract.get_greeting(), "New message");
+    }
+}
+```
+
+## Running Tests
+
+1. Click the **Test** button (or press `Ctrl/Cmd + T`)
+2. View results in the output panel
+
+<img src="/images/test-runner.png" alt="Test runner" />
+
+### Test Output
+
+```
+running 2 tests
+test tests::test_default_greeting ... ok
+test tests::test_set_greeting ... ok
+
+test result: ok. 2 passed; 0 failed
+```
+
+### Failed Tests
+
+If a test fails, you'll see the assertion that failed:
+
+```
+test tests::test_default_greeting ... FAILED
+
+---- tests::test_default_greeting ----
+assertion `left == right` failed
+  left: "Hello, NEAR!"
+  right: "Hello, World!"
+```
+
+## Test Patterns
+
+### Basic Assertions
+
+```rust
+#[test]
+fn test_basics() {
+    assert!(true);
+    assert_eq!(1 + 1, 2);
+    assert_ne!(1, 2);
+}
+```
+
+### Testing State Changes
+
+```rust
+#[test]
+fn test_increment() {
+    let mut contract = Counter::default();
+    assert_eq!(contract.get_value(), 0);
+
+    contract.increment();
+    assert_eq!(contract.get_value(), 1);
+
+    contract.increment();
+    assert_eq!(contract.get_value(), 2);
+}
+```
+
+### Testing with NEAR SDK
+
+For more advanced tests that need blockchain context:
+
+```rust
+use near_sdk::test_utils::VMContextBuilder;
+use near_sdk::testing_env;
+
+#[test]
+fn test_with_context() {
+    let context = VMContextBuilder::new()
+        .predecessor_account_id("alice.near".parse().unwrap())
+        .build();
+    testing_env!(context);
+
+    let mut contract = MyContract::default();
+    // Now env::predecessor_account_id() returns "alice.near"
+}
+```
+
+## Tips
+
+<Tip>
+Keep tests small and focused. One test per behavior.
+</Tip>
+
+<Tip>
+Use descriptive test names that explain what's being tested.
+</Tip>
+
+<Tip>
+Test edge cases: empty inputs, zero values, maximum values.
+</Tip>
+
+## Limitations
+
+The test runner runs unit tests only. For integration tests that interact with the actual blockchain, you'll need to use [NEAR Workspaces](https://github.com/near/near-workspaces-rs) locally.

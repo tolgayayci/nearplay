@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { CompilationResult, DeploymentResult, MethodCallResult, FileNode, FileContent, CrateSearchResponse, CrateVersionsResponse, CrateInfo, CrateVersion, FaucetStatusResponse, FaucetRequestResponse } from './types';
+import { CompilationResult, DeploymentResult, MethodCallResult, FileNode, FileContent, CrateSearchResponse, CrateVersionsResponse, CrateInfo, CrateVersion, FaucetStatusResponse, FaucetRequestResponse, FaucetHistoryItem } from './types';
 import { API_URL } from './config';
 
 // Create axios instance with default config
@@ -28,6 +28,7 @@ interface MethodCallRequest {
   method_name: string;
   args: any;
   method_type: 'view' | 'call';
+  rpc_url?: string;
 }
 
 interface ApiResponse<T> {
@@ -139,7 +140,8 @@ export async function callContractMethod(
   contractAddress: string,
   methodName: string,
   args: any,
-  methodType: 'view' | 'call'
+  methodType: 'view' | 'call',
+  rpcUrl?: string
 ): Promise<MethodCallResult> {
   try {
     const payload: MethodCallRequest = {
@@ -147,6 +149,7 @@ export async function callContractMethod(
       method_name: methodName,
       args,
       method_type: methodType,
+      rpc_url: rpcUrl,
     };
 
     const { data: response } = await api.post<ApiResponse<MethodCallResult>>('/method-call', payload);
@@ -639,8 +642,7 @@ export async function getFaucetStatus(userId: string): Promise<FaucetStatusRespo
  */
 export async function requestFaucet(
   userId: string,
-  recipientAccount: string,
-  turnstileToken: string
+  recipientAccount: string
 ): Promise<FaucetRequestResponse> {
   try {
     const { data: response } = await api.post<ApiResponse<FaucetRequestResponse>>(
@@ -648,7 +650,6 @@ export async function requestFaucet(
       {
         user_id: userId,
         recipient_account: recipientAccount,
-        turnstile_token: turnstileToken,
       }
     );
 
@@ -670,5 +671,29 @@ export async function requestFaucet(
       success: false,
       error: error instanceof Error ? error.message : 'Faucet request failed',
     };
+  }
+}
+
+/**
+ * Get faucet request history for a user
+ */
+export async function getFaucetHistory(
+  userId: string,
+  limit: number = 3
+): Promise<FaucetHistoryItem[]> {
+  try {
+    const { data: response } = await api.get<ApiResponse<FaucetHistoryItem[]>>(
+      '/api/faucet/history',
+      { params: { user_id: userId, limit } }
+    );
+
+    if (!response.success || !response.data) {
+      return [];
+    }
+
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch faucet history:', error);
+    return [];
   }
 }

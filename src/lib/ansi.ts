@@ -25,55 +25,55 @@ export function parseAnsiOutput(text: string): { text: string; className: string
           case 4: // Underline
             currentClasses.push('underline');
             break;
-          // Foreground colors
-          case 30: // Black
-            currentClasses.push('text-gray-900');
+          // Foreground colors (theme-aware)
+          case 30: // Black - use foreground color for visibility
+            currentClasses.push('text-foreground');
             break;
           case 31: // Red
-            currentClasses.push('text-red-500');
+            currentClasses.push('text-red-600 dark:text-red-400');
             break;
           case 32: // Green
-            currentClasses.push('text-green-500');
+            currentClasses.push('text-green-600 dark:text-green-400');
             break;
           case 33: // Yellow
-            currentClasses.push('text-yellow-500');
+            currentClasses.push('text-yellow-600 dark:text-yellow-400');
             break;
           case 34: // Blue
-            currentClasses.push('text-blue-500');
+            currentClasses.push('text-blue-600 dark:text-blue-400');
             break;
           case 35: // Magenta
-            currentClasses.push('text-purple-500');
+            currentClasses.push('text-purple-600 dark:text-purple-400');
             break;
           case 36: // Cyan
-            currentClasses.push('text-cyan-500');
+            currentClasses.push('text-cyan-600 dark:text-cyan-400');
             break;
-          case 37: // White
-            currentClasses.push('text-gray-100');
+          case 37: // White - use foreground color for visibility
+            currentClasses.push('text-foreground');
             break;
-          // Bright colors
+          // Bright colors (theme-aware)
           case 90: // Bright black (gray)
-            currentClasses.push('text-gray-500');
+            currentClasses.push('text-muted-foreground');
             break;
           case 91: // Bright red
-            currentClasses.push('text-red-400');
+            currentClasses.push('text-red-500 dark:text-red-300');
             break;
           case 92: // Bright green
-            currentClasses.push('text-green-400');
+            currentClasses.push('text-green-500 dark:text-green-300');
             break;
           case 93: // Bright yellow
-            currentClasses.push('text-yellow-400');
+            currentClasses.push('text-yellow-500 dark:text-yellow-300');
             break;
           case 94: // Bright blue
-            currentClasses.push('text-blue-400');
+            currentClasses.push('text-blue-500 dark:text-blue-300');
             break;
           case 95: // Bright magenta
-            currentClasses.push('text-purple-400');
+            currentClasses.push('text-purple-500 dark:text-purple-300');
             break;
           case 96: // Bright cyan
-            currentClasses.push('text-cyan-400');
+            currentClasses.push('text-cyan-500 dark:text-cyan-300');
             break;
           case 97: // Bright white
-            currentClasses.push('text-white');
+            currentClasses.push('text-foreground');
             break;
           // Background colors (40-47, 100-107)
           case 41: // Red background

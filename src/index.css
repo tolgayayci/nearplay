@@ -94,3 +94,12 @@
     @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/30 transition-colors;
   }
 }
+
+/* Monaco editor search highlight */
+.search-highlight-line {
+  background-color: rgba(255, 213, 0, 0.3) !important;
+}
+
+.dark .search-highlight-line {
+  background-color: rgba(255, 213, 0, 0.2) !important;
+}

@@ -1,0 +1,116 @@
+---
+title: FAQ
+description: Frequently asked questions about NEAR Playground
+---
+
+# FAQ
+
+## General
+
+<AccordionGroup>
+  <Accordion title="Is NEAR Playground free?">
+    Yes! NEAR Playground is completely free. Testnet deployments cost nothing - we fund the accounts for you.
+
+    Mainnet deployments require your own NEAR tokens.
+  </Accordion>
+
+  <Accordion title="Do I need to install anything?">
+    No. NEAR Playground runs entirely in your browser. Just visit [nearplay.app](https://nearplay.app) and start coding.
+  </Accordion>
+
+  <Accordion title="Is my code saved?">
+    Yes. Your code auto-saves as you type and is stored in your account. You can close the browser and come back later.
+  </Accordion>
+
+  <Accordion title="Can I share my projects?">
+    Yes. Each project has a shareable link. Others can view your code and deployed contracts.
+  </Accordion>
+</AccordionGroup>
+
+## Compilation
+
+<AccordionGroup>
+  <Accordion title="Why is compilation slow?">
+    First compilation takes longer because dependencies need to be downloaded and cached. Subsequent compilations are faster.
+  </Accordion>
+
+  <Accordion title="What Rust version is used?">
+    We use the latest stable Rust with `cargo-near` for NEAR-optimized builds.
+  </Accordion>
+
+  <Accordion title="Can I use external crates?">
+    Currently, NEAR Playground supports single-file contracts with `near-sdk`. For complex projects with multiple dependencies, use a local development environment.
+  </Accordion>
+
+  <Accordion title="My contract won't compile">
+    Common issues:
+    - Missing semicolons or brackets
+    - Wrong `near-sdk` macro usage
+    - Type mismatches
+
+    Check the error messages in the output panel - they show the exact line and issue.
+  </Accordion>
+</AccordionGroup>
+
+## Deployment
+
+<AccordionGroup>
+  <Accordion title="What's the difference between Playground and Wallet mode?">
+    **Playground mode**: Free testnet deployment. We create and fund the account for you.
+
+    **Wallet mode**: Mainnet deployment with your own wallet (HOT or Meteor). Uses real NEAR tokens.
+  </Accordion>
+
+  <Accordion title="Can I deploy to testnet with my wallet?">
+    No. External wallets (HOT, Meteor) only support mainnet. For testnet, use Playground mode - it's free and has the same functionality.
+  </Accordion>
+
+  <Accordion title="How much does mainnet deployment cost?">
+    Roughly 0.1 NEAR per 10KB of contract size, plus ~0.01 NEAR for gas. A typical 150KB contract costs about 1.5 NEAR.
+  </Accordion>
+
+  <Accordion title="Can I redeploy to the same address?">
+    In Playground mode, each deployment creates a new address. In Wallet mode, you deploy to your own account and can update it.
+  </Accordion>
+</AccordionGroup>
+
+## Contract Interface
+
+<AccordionGroup>
+  <Accordion title="Why do view methods show 'undefined'?">
+    The method might be returning `()` (unit type) instead of a value. Make sure your view method has a return type.
+  </Accordion>
+
+  <Accordion title="My call method isn't changing state">
+    Make sure your method takes `&mut self` instead of `&self`. Only mutable methods can change state.
+  </Accordion>
+
+  <Accordion title="How do I pass complex arguments?">
+    For structs or vectors, use JSON format in the input field:
+    ```json
+    {"name": "Alice", "age": 25}
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="The page is blank or not loading">
+    - Clear your browser cache
+    - Try a different browser (Chrome or Firefox recommended)
+    - Disable browser extensions
+  </Accordion>
+
+  <Accordion title="My wallet won't connect">
+    - Make sure your wallet is unlocked
+    - Try refreshing the page
+    - Check if popup blockers are preventing the wallet window
+  </Accordion>
+
+  <Accordion title="Deployment is stuck">
+    Deployments usually complete in 5-10 seconds. If stuck:
+    - Check your internet connection
+    - Try refreshing and deploying again
+  </Accordion>
+</AccordionGroup>

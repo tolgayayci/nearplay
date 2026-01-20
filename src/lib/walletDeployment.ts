@@ -3,6 +3,15 @@ import { Network } from '@/contexts/WalletContext';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
+// Factory contract addresses for each network
+const FACTORY_CONTRACT = {
+  testnet: 'factory.nearplay.testnet',
+  mainnet: 'factory.nearplay.near',
+};
+
+// Minimum deposit required for factory deployment (covers storage + account creation)
+const FACTORY_DEPOSIT = '3000000000000000000000000'; // 3 NEAR
+
 export interface WalletDeploymentResult {
   success: boolean;
   contractId: string;
@@ -10,6 +19,7 @@ export interface WalletDeploymentResult {
   explorerUrl: string;
   gasUsed?: string;
   blockHeight?: number;
+  wasm_hash?: string;
 }
 
 export interface DeploymentOptions {
@@ -66,61 +76,95 @@ export async function fetchWasmCode(
 }
 
 /**
- * Deploy contract using user's connected wallet
+ * Check if factory contract is deployed and available
  */
-export async function deployWithWallet(
+export async function checkFactoryAvailability(network: Network): Promise<boolean> {
+  const factoryId = FACTORY_CONTRACT[network];
+  try {
+    const rpcUrl = network === 'mainnet'
+      ? 'https://rpc.mainnet.near.org'
+      : 'https://rpc.testnet.near.org';
+
+    const response = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'check-factory',
+        method: 'query',
+        params: {
+          request_type: 'view_account',
+          finality: 'final',
+          account_id: factoryId,
+        },
+      }),
+    });
+    const data = await response.json();
+    return !data.error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Deploy contract using factory pattern (recommended for wallet deployment)
+ * This works with all wallets because it uses FunctionCall instead of DeployContract
+ */
+export async function deployWithFactory(
   options: DeploymentOptions
 ): Promise<WalletDeploymentResult> {
   const {
     selector,
     userId,
     projectId,
-    targetAccountId,
     network,
-    initMethodName,
-    initArgs,
   } = options;
 
-  // Get the active wallet
   const wallet = await selector.wallet();
+  const accounts = await wallet.getAccounts();
+  if (!accounts || accounts.length === 0) {
+    throw new Error('No wallet account connected');
+  }
+  const signerAccountId = accounts[0].accountId;
 
   // Fetch the compiled WASM from backend
   const wasmCode = await fetchWasmCode(userId, projectId);
 
-  // Build actions array - try borsh struct format
-  const actions: Array<Record<string, unknown>> = [
-    {
-      deployContract: {
-        code: wasmCode,
-      },
-    },
-  ];
+  // Generate unique contract name based on user and project
+  const timestamp = Date.now();
+  const shortUserId = userId.slice(0, 8);
+  const shortProjectId = projectId.slice(0, 8);
+  const contractName = `${shortUserId}-${shortProjectId}-${timestamp}`;
 
-  // Optionally add init method call
-  if (initMethodName) {
-    actions.push({
-      functionCall: {
-        methodName: initMethodName,
-        args: initArgs || {},
-        gas: '30000000000000', // 30 TGas
-        deposit: '0',
-      },
-    });
-  }
+  // Factory contract address
+  const factoryId = FACTORY_CONTRACT[network];
 
-  // Sign and send transaction
+  // Call factory.deploy_contract() with FunctionCall action
+  // This is supported by ALL wallets
   const result = await wallet.signAndSendTransaction({
-    receiverId: targetAccountId,
-    actions,
+    signerId: signerAccountId,
+    receiverId: factoryId,
+    actions: [
+      {
+        type: 'FunctionCall',
+        params: {
+          methodName: 'deploy_contract',
+          args: {
+            name: contractName,
+            code: Array.from(wasmCode), // Convert Uint8Array to number array for JSON
+          },
+          gas: '300000000000000', // 300 TGas
+          deposit: FACTORY_DEPOSIT, // 3 NEAR for storage
+        },
+      },
+    ],
   });
 
-  // Handle result
   if (!result) {
     throw new Error('Transaction was rejected or failed');
   }
 
-  // Extract transaction info from result
-  // The result structure varies by wallet, handle both cases
+  // Extract transaction info
   let transactionHash: string;
   let blockHeight: number | undefined;
 
@@ -131,11 +175,12 @@ export async function deployWithWallet(
     transactionHash = (result as any).transaction_outcome?.id;
     blockHeight = (result as any).transaction_outcome?.block_height;
   } else {
-    // Fallback - assume result is the hash
     transactionHash = String(result);
   }
 
-  // Build explorer URL
+  // The deployed contract will be at: contractName.factory.nearplay.testnet
+  const deployedContractId = `${contractName}.${factoryId}`;
+
   const explorerBase = network === 'mainnet'
     ? 'https://nearblocks.io'
     : 'https://testnet.nearblocks.io';
@@ -143,11 +188,52 @@ export async function deployWithWallet(
 
   return {
     success: true,
-    contractId: targetAccountId,
+    contractId: deployedContractId,
     transactionHash,
     explorerUrl,
     blockHeight,
   };
+}
+
+/**
+ * Deploy contract using user's connected wallet
+ *
+ * IMPORTANT: Direct DeployContract action is NOT supported by most NEAR wallets
+ * for security reasons. Wallets only expose function-call keys to web apps,
+ * not full-access keys which are required for DeployContract.
+ *
+ * This function will attempt factory deployment if available, otherwise
+ * it will throw an informative error directing users to Playground mode.
+ */
+export async function deployWithWallet(
+  options: DeploymentOptions
+): Promise<WalletDeploymentResult> {
+  const { network } = options;
+
+  // Check if factory is available
+  const factoryAvailable = await checkFactoryAvailability(network);
+
+  if (factoryAvailable) {
+    // Use factory pattern - works with all wallets
+    return deployWithFactory(options);
+  }
+
+  // Factory not available - explain the limitation
+  throw new WalletDeploymentNotSupportedError(
+    'Wallet deployment requires a factory contract that is not yet deployed. ' +
+    'Please use Playground mode for now, which provides free testnet deployment. ' +
+    'Factory deployment support is coming soon!'
+  );
+}
+
+/**
+ * Custom error class for wallet deployment limitations
+ */
+export class WalletDeploymentNotSupportedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WalletDeploymentNotSupportedError';
+  }
 }
 
 /**

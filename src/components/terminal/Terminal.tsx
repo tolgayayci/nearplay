@@ -5,6 +5,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { cn } from '@/lib/utils';
 import { useTerminal } from '@/hooks/useTerminal';
+import { useRPC } from '@/contexts/RPCContext';
+import { useWallet } from '@/contexts/WalletContext';
 import { Button } from '@/components/ui/button';
 import {
   TerminalIcon,
@@ -57,6 +59,9 @@ export function Terminal({
   const [isRunningCommand, setIsRunningCommand] = useState(false);
   const { theme, systemTheme } = useTheme();
   const { toast } = useToast();
+  const { getCurrentRpcUrl } = useRPC();
+  const { network } = useWallet();
+  const rpcUrlRef = useRef<string>('');
 
   const effectiveTheme = theme === 'system' ? systemTheme : theme;
 
@@ -88,7 +93,6 @@ export function Terminal({
   const handleReady = useCallback(() => {
     setIsReady(true);
     if (xtermRef.current) {
-      xtermRef.current.writeln('\x1b[32mTerminal connected\x1b[0m');
       xtermRef.current.write('$ ');
     }
   }, []);
@@ -142,6 +146,11 @@ export function Terminal({
     setIsRunningCommandRef.current = setIsRunningCommand;
   }, []);
 
+  // Keep RPC URL ref in sync
+  useEffect(() => {
+    rpcUrlRef.current = getCurrentRpcUrl(network);
+  }, [getCurrentRpcUrl, network]);
+
   // Initialize xterm
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -173,27 +182,28 @@ export function Terminal({
         brightCyan: '#9aedfe',
         brightWhite: '#ffffff',
       } : {
+        // Light theme - colors optimized for white background
         background: '#ffffff',
-        foreground: '#333333',
-        cursor: '#333333',
+        foreground: '#1e1e1e',
+        cursor: '#1e1e1e',
         cursorAccent: '#ffffff',
-        selectionBackground: '#d4d4d4',
-        black: '#000000',
-        red: '#cd3131',
-        green: '#00bc00',
-        yellow: '#949800',
-        blue: '#0451a5',
-        magenta: '#bc05bc',
-        cyan: '#0598bc',
-        white: '#555555',
-        brightBlack: '#666666',
-        brightRed: '#cd3131',
-        brightGreen: '#14ce14',
-        brightYellow: '#b5ba00',
-        brightBlue: '#0451a5',
-        brightMagenta: '#bc05bc',
-        brightCyan: '#0598bc',
-        brightWhite: '#a5a5a5',
+        selectionBackground: '#add6ff',
+        black: '#1e1e1e',      // Visible black (not pure black)
+        red: '#dc2626',        // Tailwind red-600
+        green: '#16a34a',      // Tailwind green-600
+        yellow: '#ca8a04',     // Tailwind yellow-600
+        blue: '#2563eb',       // Tailwind blue-600
+        magenta: '#9333ea',    // Tailwind purple-600
+        cyan: '#0891b2',       // Tailwind cyan-600
+        white: '#f5f5f5',      // Light gray for white text
+        brightBlack: '#737373', // Tailwind neutral-500
+        brightRed: '#ef4444',  // Tailwind red-500
+        brightGreen: '#22c55e', // Tailwind green-500
+        brightYellow: '#eab308', // Tailwind yellow-500
+        brightBlue: '#3b82f6', // Tailwind blue-500
+        brightMagenta: '#a855f7', // Tailwind purple-500
+        brightCyan: '#06b6d4', // Tailwind cyan-500
+        brightWhite: '#e5e5e5', // Tailwind neutral-200
       },
       allowTransparency: false,
       rows: 15,
@@ -229,8 +239,8 @@ export function Terminal({
         if (command) {
           // Set running state before sending command
           setIsRunningCommandRef.current?.(true);
-          // Use ref to get current sendCommand function
-          sendCommandRef.current?.(command);
+          // Use ref to get current sendCommand function and RPC URL
+          sendCommandRef.current?.(command, rpcUrlRef.current);
         } else {
           xterm.write('$ ');
         }
@@ -255,11 +265,6 @@ export function Terminal({
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
-    // Welcome message
-    xterm.writeln('\x1b[1;36mNEAR Playground Terminal\x1b[0m');
-    xterm.writeln('Allowed commands: cargo, near, ls, pwd, cat, tree, rustc, rustfmt');
-    xterm.writeln('');
-
     // Handle resize
     const handleResize = () => {
       fitAddon.fit();
@@ -280,10 +285,46 @@ export function Terminal({
         background: '#1a1a1a',
         foreground: '#e0e0e0',
         cursor: '#ffffff',
+        cursorAccent: '#000000',
+        selectionBackground: '#444444',
+        black: '#000000',
+        red: '#ff5555',
+        green: '#50fa7b',
+        yellow: '#f1fa8c',
+        blue: '#6272a4',
+        magenta: '#ff79c6',
+        cyan: '#8be9fd',
+        white: '#bfbfbf',
+        brightBlack: '#4d4d4d',
+        brightRed: '#ff6e67',
+        brightGreen: '#5af78e',
+        brightYellow: '#f4f99d',
+        brightBlue: '#caa9fa',
+        brightMagenta: '#ff92d0',
+        brightCyan: '#9aedfe',
+        brightWhite: '#ffffff',
       } : {
         background: '#ffffff',
-        foreground: '#333333',
-        cursor: '#333333',
+        foreground: '#1e1e1e',
+        cursor: '#1e1e1e',
+        cursorAccent: '#ffffff',
+        selectionBackground: '#add6ff',
+        black: '#1e1e1e',
+        red: '#dc2626',
+        green: '#16a34a',
+        yellow: '#ca8a04',
+        blue: '#2563eb',
+        magenta: '#9333ea',
+        cyan: '#0891b2',
+        white: '#f5f5f5',
+        brightBlack: '#737373',
+        brightRed: '#ef4444',
+        brightGreen: '#22c55e',
+        brightYellow: '#eab308',
+        brightBlue: '#3b82f6',
+        brightMagenta: '#a855f7',
+        brightCyan: '#06b6d4',
+        brightWhite: '#e5e5e5',
       };
     }
   }, [effectiveTheme]);
@@ -513,7 +554,10 @@ export function Terminal({
       <div
         ref={terminalRef}
         className="flex-1 p-2"
-        style={{ minHeight: 0 }}
+        style={{
+          minHeight: 0,
+          backgroundColor: effectiveTheme === 'dark' ? '#1a1a1a' : '#ffffff'
+        }}
       />
 
       {/* Expanded Modal View */}

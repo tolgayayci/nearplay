@@ -44,7 +44,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/App';
 import { getExplorerAccountUrl } from '@/lib/config';
 import { VerificationModal } from '@/components/verification/VerificationModal';
-import { useWallet, formatNearAmount, DeploymentMode } from '@/contexts/WalletContext';
+import { useWallet, formatNearAmount, DeploymentMode, getWalletDisplayName } from '@/contexts/WalletContext';
 import { useRPC } from '@/contexts/RPCContext';
 import {
   deployWithWallet,
@@ -52,6 +52,8 @@ import {
   estimateDeploymentCost,
   formatYoctoNear,
   getExplorerAccountUrl as getWalletExplorerAccountUrl,
+  checkFactoryAvailability,
+  WalletDeploymentNotSupportedError,
 } from '@/lib/walletDeployment';
 
 interface DeployDialogProps {
@@ -78,6 +80,8 @@ export function DeployDialog({
   const [deploymentError, setDeploymentError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [factoryAvailable, setFactoryAvailable] = useState<boolean | null>(null);
+  const [isCheckingFactory, setIsCheckingFactory] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -127,6 +131,23 @@ export function DeployDialog({
     }
   }, [open, deploymentMode, isConnected, refreshBalance]);
 
+  // Check factory availability when wallet mode is selected
+  useEffect(() => {
+    if (open && deploymentMode === 'wallet') {
+      setIsCheckingFactory(true);
+      checkFactoryAvailability(network)
+        .then(available => {
+          setFactoryAvailable(available);
+        })
+        .catch(() => {
+          setFactoryAvailable(false);
+        })
+        .finally(() => {
+          setIsCheckingFactory(false);
+        });
+    }
+  }, [open, deploymentMode, network]);
+
   const handlePlaygroundDeploy = async () => {
     if (showABIError) return;
     if (!user) {
@@ -172,6 +193,7 @@ export function DeployDialog({
             network: result.details.network,
             wallet_type: 'playground',
             wallet_address: result.details.deployer_account,
+            wasm_hash: result.wasm_hash,
           }
         });
 
@@ -254,6 +276,18 @@ export function DeployDialog({
       });
     } catch (error) {
       console.error('Wallet deployment error:', error);
+
+      // Handle specific error types
+      if (error instanceof WalletDeploymentNotSupportedError) {
+        setDeploymentError(error.message);
+        toast({
+          title: "Wallet Deployment Not Available",
+          description: "Please use Playground mode for now. Factory deployment coming soon!",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const errorMessage = error instanceof Error
         ? error.message
         : "Failed to deploy contract";
@@ -261,6 +295,10 @@ export function DeployDialog({
       // Format better error messages
       if (errorMessage.includes('Cannot connect to backend')) {
         setDeploymentError("Cannot connect to the backend server. Please ensure the server is running.");
+      } else if (errorMessage.includes('rejected') || errorMessage.includes('cancelled')) {
+        setDeploymentError("Transaction was cancelled or rejected by wallet.");
+      } else if (errorMessage.includes('insufficient') || errorMessage.includes('balance')) {
+        setDeploymentError("Insufficient balance. Factory deployment requires ~3 NEAR deposit.");
       } else {
         setDeploymentError(errorMessage);
       }
@@ -455,6 +493,51 @@ export function DeployDialog({
               </div>
             ) : (
               <div className="space-y-3">
+                {/* Factory Availability Check */}
+                {isCheckingFactory && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Checking deployment availability...</span>
+                  </div>
+                )}
+
+                {/* Factory Not Available Warning */}
+                {!isCheckingFactory && factoryAvailable === false && (
+                  <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-600 dark:text-amber-400">Factory Contract Not Available</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Wallet deployment requires a factory contract that isn't deployed yet on {network}.
+                          For security reasons, NEAR wallets don't allow direct contract deployment.
+                        </p>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 mt-2 text-xs"
+                          onClick={() => handleModeSwitch('playground')}
+                        >
+                          Switch to Playground mode (recommended)
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Factory Available Success */}
+                {!isCheckingFactory && factoryAvailable === true && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
+                    <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-green-600 dark:text-green-400">Factory Deployment Available</p>
+                      <p className="text-xs text-muted-foreground">
+                        Your contract will be deployed to a sub-account via our factory. Requires ~3 NEAR deposit.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Mainnet Warning */}
                 {network === 'mainnet' && (
                   <div className="flex items-start gap-2 p-3 rounded-lg border border-destructive/30 bg-destructive/5">
@@ -476,11 +559,7 @@ export function DeployDialog({
                         <div className="h-2 w-2 rounded-full bg-green-500" />
                         <span className="text-xs text-muted-foreground">Connected via</span>
                         <span className="text-xs font-medium">
-                          {walletId === 'my-near-wallet' ? 'MyNearWallet' :
-                           walletId === 'intear-wallet' ? 'Intear Wallet' :
-                           walletId === 'here-wallet' ? 'HERE Wallet' :
-                           walletId === 'sender' ? 'Sender' :
-                           walletId || 'Wallet'}
+                          {getWalletDisplayName(walletId)}
                         </span>
                       </div>
                       <Badge variant="secondary" className="text-xs">
@@ -774,7 +853,9 @@ export function DeployDialog({
                 disabled={
                   isDeploying ||
                   showABIError ||
-                  (deploymentMode === 'wallet' && !isConnected)
+                  (deploymentMode === 'wallet' && !isConnected) ||
+                  (deploymentMode === 'wallet' && factoryAvailable === false) ||
+                  (deploymentMode === 'wallet' && isCheckingFactory)
                 }
               >
                 {isDeploying ? (
@@ -802,6 +883,7 @@ export function DeployDialog({
           userId={user.id}
           projectId={projectId}
           contractId={getContractId()}
+          wasmHash={'wasm_hash' in deploymentResult ? deploymentResult.wasm_hash : undefined}
           network={deploymentMode === 'wallet' ? network : 'testnet'}
         />
       )}

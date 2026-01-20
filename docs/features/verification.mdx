@@ -1,0 +1,76 @@
+---
+title: Contract Verification
+description: Verify your contract's source code matches the deployed bytecode
+---
+
+# Contract Verification
+
+Contract verification proves that your deployed bytecode matches your source code.
+
+<img src="/images/verification.png" alt="Contract verification" />
+
+## Why Verify?
+
+- **Trust** - Users can see the actual code running on-chain
+- **Transparency** - No hidden functionality
+- **Auditability** - Anyone can review the source
+
+## How It Works
+
+1. When you compile, we store a SHA256 hash of the WASM bytecode
+2. When you verify, we fetch the on-chain bytecode
+3. We compare the hashes
+4. If they match, the contract is verified
+
+```
+Compiled Hash:  a1b2c3d4e5f6...
+On-chain Hash:  a1b2c3d4e5f6...
+Status: ✓ Verified
+```
+
+## Verifying a Contract
+
+1. Go to the Contract Interface tab
+2. Select a deployment
+3. Click **Verify Contract**
+4. Wait for the verification check
+
+<img src="/images/verify-button.png" alt="Verify button" />
+
+### Verification Status
+
+| Status | Meaning |
+|--------|---------|
+| ✓ Verified | Bytecode matches source |
+| ✗ Not Verified | Bytecode doesn't match |
+| – Unverified | Not yet checked |
+
+## Verification Badge
+
+Verified contracts show a green badge:
+
+<img src="/images/verified-badge.png" alt="Verified badge" />
+
+Click the badge to see verification details:
+- Verification timestamp
+- Bytecode hash
+- How verification works
+
+## Limitations
+
+Verification only works for contracts deployed through NEAR Playground.
+
+<Note>
+If you deployed externally or modified the contract after deployment, verification will fail.
+</Note>
+
+## Common Issues
+
+**"Bytecode Mismatch"**
+
+This happens when:
+- The contract was modified after compilation
+- A different version was deployed
+- The contract was deployed outside NEAR Playground
+
+**Solution**: Recompile and redeploy through NEAR Playground.

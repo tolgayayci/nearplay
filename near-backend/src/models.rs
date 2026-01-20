@@ -21,6 +21,7 @@ pub struct MethodCallRequest {
     pub method_name: String,
     pub args: serde_json::Value,
     pub method_type: String, // "view" or "call"
+    pub rpc_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -67,6 +68,7 @@ pub struct DeployResponse {
     pub proof_tx_hash: Option<String>,
     pub details: DeployDetails,
     pub github_repo_url: Option<String>,
+    pub wasm_hash: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -245,6 +247,21 @@ pub struct VerificationStatusResponse {
     pub verification_date: Option<String>,
 }
 
+// Contract verification request/response
+#[derive(Debug, Deserialize)]
+pub struct VerifyContractRequest {
+    pub contract_id: String,
+    pub network: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerifyContractResponse {
+    pub verified: bool,
+    pub compiled_hash: String,
+    pub onchain_hash: String,
+    pub verified_at: Option<String>,
+}
+
 // GitHub clone API models
 #[derive(Debug, Deserialize)]
 pub struct GitHubCloneRequest {
@@ -275,7 +292,6 @@ pub struct ProjectExportQuery {
 pub struct FaucetRequest {
     pub user_id: String,
     pub recipient_account: String,
-    pub turnstile_token: String,
 }
 
 #[derive(Debug, Serialize)]

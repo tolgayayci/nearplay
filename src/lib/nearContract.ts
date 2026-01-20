@@ -135,7 +135,8 @@ function extractNearError(result: any): string {
 export async function executeNearMethod(
   contractAddress: string,
   method: ABIMethod,
-  inputs: Record<string, string>
+  inputs: Record<string, string>,
+  rpcUrl?: string
 ): Promise<{
   success: boolean;
   result?: any;
@@ -163,12 +164,13 @@ export async function executeNearMethod(
       ? 'view'
       : 'call';
 
-    // Call the backend API
+    // Call the backend API with optional RPC URL
     const response = await callContractMethod(
       contractAddress,
       method.name,
       args,
-      methodType
+      methodType,
+      rpcUrl
     );
 
     // Extract the actual result from the new backend format

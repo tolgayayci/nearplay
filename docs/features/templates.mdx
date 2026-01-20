@@ -1,0 +1,132 @@
+---
+title: Contract Templates
+description: Start with pre-built smart contract templates
+---
+
+# Contract Templates
+
+NEAR Playground includes templates to help you get started quickly.
+
+## Available Templates
+
+### Counter
+
+A simple contract demonstrating state management.
+
+```rust
+#[near(contract_state)]
+pub struct Counter {
+    value: i32,
+}
+
+#[near]
+impl Counter {
+    pub fn increment(&mut self) { ... }
+    pub fn decrement(&mut self) { ... }
+    pub fn get_value(&self) -> i32 { ... }
+}
+```
+
+**Best for**: Learning the basics of NEAR smart contracts.
+
+---
+
+### NEP-141 Fungible Token
+
+Standard fungible token implementation (like ERC-20).
+
+```rust
+#[near(contract_state)]
+pub struct FungibleToken {
+    token: FungibleTokenCore,
+    metadata: LazyOption<FungibleTokenMetadata>,
+}
+```
+
+**Features**:
+- Transfer tokens
+- Check balances
+- Approve allowances
+- Token metadata
+
+**Best for**: Creating your own token.
+
+---
+
+### NEP-171 Non-Fungible Token
+
+Standard NFT implementation (like ERC-721).
+
+```rust
+#[near(contract_state)]
+pub struct NFTContract {
+    tokens: NonFungibleToken,
+    metadata: LazyOption<NFTContractMetadata>,
+}
+```
+
+**Features**:
+- Mint NFTs
+- Transfer ownership
+- Token metadata
+- Royalties support
+
+**Best for**: Creating NFT collections.
+
+---
+
+### Voting Contract
+
+A simple voting system with proposals.
+
+```rust
+#[near(contract_state)]
+pub struct VotingContract {
+    proposals: Vector<Proposal>,
+    votes: LookupMap<AccountId, Vote>,
+}
+```
+
+**Features**:
+- Create proposals
+- Cast votes
+- Tally results
+
+**Best for**: Learning about governance contracts.
+
+---
+
+### Escrow Contract
+
+Hold funds until conditions are met.
+
+```rust
+#[near(contract_state)]
+pub struct Escrow {
+    deposits: LookupMap<AccountId, Balance>,
+    arbiter: AccountId,
+}
+```
+
+**Features**:
+- Deposit funds
+- Release to recipient
+- Refund to sender
+- Arbiter approval
+
+**Best for**: Understanding multi-party transactions.
+
+## Using Templates
+
+1. Click **New Project**
+2. Select a template
+3. Give your project a name
+4. Click **Create**
+
+The template code loads in the editor, ready for customization.
+
+<img src="/images/template-select.png" alt="Template selection" />
+
+<Tip>
+Templates are a starting point. Feel free to modify them for your needs!
+</Tip>

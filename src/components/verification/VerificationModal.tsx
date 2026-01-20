@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,19 +8,15 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
-  CheckCircle2,
   XCircle,
   Loader2,
-  ExternalLink,
-  Github,
   ShieldCheck,
   ShieldAlert,
-  AlertCircle,
+  Info,
 } from 'lucide-react';
 import {
-  checkVerificationStatus,
-  publishSource,
-  PublishResult,
+  verifyContract,
+  VerifyContractResult,
 } from '@/lib/verification';
 
 interface VerificationModalProps {
@@ -29,11 +25,14 @@ interface VerificationModalProps {
   userId: string;
   projectId: string;
   contractId?: string;
+  wasmHash?: string; // Stored hash from deployment
+  isVerified?: boolean; // Already verified
+  verifiedAt?: string; // When it was verified
   network?: 'testnet' | 'mainnet';
-  onVerificationComplete?: () => void;
+  onVerificationComplete?: (result: VerifyContractResult) => void;
 }
 
-type VerificationStep = 'idle' | 'publishing' | 'published' | 'checking' | 'verified' | 'error';
+type VerificationStep = 'idle' | 'already_verified' | 'verifying' | 'verified' | 'failed' | 'error';
 
 export function VerificationModal({
   open,
@@ -41,109 +40,67 @@ export function VerificationModal({
   userId,
   projectId,
   contractId: initialContractId,
+  wasmHash,
+  isVerified = false,
+  verifiedAt,
   network = 'testnet',
   onVerificationComplete,
 }: VerificationModalProps) {
   const [contractId] = useState(initialContractId || '');
   const [step, setStep] = useState<VerificationStep>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
-  const [verificationStatus, setVerificationStatus] = useState<'unknown' | 'verified' | 'pending'>('unknown');
-  const [pollCount, setPollCount] = useState(0);
+  const [result, setResult] = useState<VerifyContractResult | null>(null);
 
-  // Reset state when modal opens
+  // Set initial state when modal opens
   useEffect(() => {
     if (open) {
-      setStep('idle');
+      console.log('VerificationModal opened with:', { isVerified, wasmHash, verifiedAt });
       setError(null);
-      setPublishResult(null);
-      setVerificationStatus('unknown');
-      setPollCount(0);
-    }
-  }, [open]);
-
-  // Poll for verification status
-  const checkStatus = useCallback(async () => {
-    if (!contractId) return;
-
-    try {
-      const status = await checkVerificationStatus(contractId, network);
-      if (status.verified) {
-        setVerificationStatus('verified');
-        setStep('verified');
-        return true;
+      if (isVerified && wasmHash) {
+        setStep('already_verified');
+        setResult({
+          verified: true,
+          compiled_hash: wasmHash,
+          onchain_hash: wasmHash,
+          verified_at: verifiedAt,
+        });
+      } else {
+        setStep('idle');
+        setResult(null);
       }
-      return false;
-    } catch {
-      return false;
     }
-  }, [contractId, network]);
-
-  // Poll verification status after publishing
-  useEffect(() => {
-    if (step !== 'checking') return;
-    if (pollCount >= 30) {
-      // After 30 attempts (about 1 minute), stop polling
-      setVerificationStatus('pending');
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      const verified = await checkStatus();
-      if (!verified) {
-        setPollCount(prev => prev + 1);
-      }
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, [step, pollCount, checkStatus]);
+  }, [open, isVerified, wasmHash, verifiedAt]);
 
   const handleVerify = async () => {
     if (!contractId) return;
 
+    if (!wasmHash) {
+      setError('No compiled hash found. This contract may have been deployed before verification was enabled.');
+      setStep('error');
+      return;
+    }
+
     setError(null);
-    setStep('publishing');
+    setStep('verifying');
 
     try {
-      // Step 1: Publish source to GitHub
-      const result = await publishSource(userId, projectId, contractId);
-      setPublishResult(result);
+      const verifyResult = await verifyContract(contractId, wasmHash, network);
+      setResult(verifyResult);
 
-      // Step 2: Show published state - user needs to complete on Nearblocks
-      setStep('published');
+      if (verifyResult.verified) {
+        setStep('verified');
+        onVerificationComplete?.(verifyResult);
+      } else {
+        setStep('failed');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to publish source');
+      setError(err instanceof Error ? err.message : 'Verification failed');
       setStep('error');
     }
   };
 
-  const handleCheckStatus = async () => {
-    setStep('checking');
-    setPollCount(0);
-
-    // Check immediately once
-    const verified = await checkStatus();
-    if (verified) {
-      setStep('verified');
-    }
-  };
-
-  const handleOpenNearblocks = () => {
-    const verifier = network === 'mainnet'
-      ? 'v2-verifier.sourcescan.near'
-      : 'v2-verifier.sourcescan.testnet';
-    const base = network === 'mainnet'
-      ? 'https://nearblocks.io'
-      : 'https://testnet.nearblocks.io';
-    const url = `${base}/verify-contract?accountId=${contractId}&selectedVerifier=${verifier}`;
-    window.open(url, '_blank');
-  };
-
   const handleClose = () => {
     onOpenChange(false);
-    if (step === 'verified' && onVerificationComplete) {
-      onVerificationComplete();
-    }
   };
 
   return (
@@ -152,10 +109,13 @@ export function VerificationModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5" />
-            Verify Contract Source
+            {step === 'already_verified' ? 'Contract Verified' : 'Verify Contract'}
           </DialogTitle>
           <DialogDescription>
-            Verify your contract for NEP-330 compliance
+            {step === 'already_verified'
+              ? 'This contract has already been verified'
+              : 'Verify your contract bytecode matches the deployed code'
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -166,161 +126,89 @@ export function VerificationModal({
             <div className="font-mono text-sm break-all">{contractId}</div>
           </div>
 
-          {/* Idle State - Explain what will happen */}
-          {step === 'idle' && (
-            <div className="space-y-4">
-              <div className="p-4 border rounded-lg space-y-3">
-                <h4 className="font-medium text-sm">What happens when you verify:</h4>
-                <ol className="text-sm text-muted-foreground space-y-2 list-decimal ml-4">
-                  <li>Your source code will be published to a public GitHub repository</li>
-                  <li>SourceScan will verify your contract matches the deployed bytecode</li>
-                  <li>Your contract will receive a verified badge on block explorers</li>
-                </ol>
-              </div>
-
-              <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                <div className="flex gap-2">
-                  <AlertCircle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
-                  <p className="text-sm text-orange-600 dark:text-orange-400">
-                    Your source code will become publicly visible. Do not verify if your code contains sensitive information.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Publishing State */}
-          {step === 'publishing' && (
-            <div className="flex flex-col items-center py-8 space-y-4">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <div className="text-center">
-                <p className="font-medium">Publishing source code...</p>
-                <p className="text-sm text-muted-foreground">Creating GitHub repository</p>
-              </div>
-            </div>
-          )}
-
-          {/* Published State - Source published, needs manual verification */}
-          {step === 'published' && publishResult && (
+          {/* Already Verified State */}
+          {step === 'already_verified' && result && (
             <div className="space-y-4">
               <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
                 <div className="flex gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
-                  <div className="flex-1">
+                  <ShieldCheck className="h-6 w-6 text-green-500 shrink-0" />
+                  <div>
                     <p className="font-medium text-green-600 dark:text-green-400">
-                      Source Code Published
+                      Already Verified
                     </p>
-                    <a
-                      href={publishResult.repo_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-green-600/80 dark:text-green-400/80 hover:underline flex items-center gap-1 mt-1"
-                    >
-                      <Github className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{publishResult.repo_url}</span>
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                    </a>
+                    <p className="text-sm text-green-600/80 dark:text-green-400/80 mt-1">
+                      This contract has been verified through NEAR Playground.
+                    </p>
                   </div>
                 </div>
               </div>
 
-              <div className="p-4 border rounded-lg space-y-3">
-                <h4 className="font-medium text-sm">Next Step: Complete Verification</h4>
+              {result.verified_at && (
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <div className="text-xs text-muted-foreground mb-1">Verified at</div>
+                  <div className="text-sm">
+                    {new Date(result.verified_at).toLocaleString()}
+                  </div>
+                </div>
+              )}
+
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <div className="text-xs text-muted-foreground mb-1">Bytecode Hash</div>
+                <div className="font-mono text-xs break-all">{result.compiled_hash}</div>
+              </div>
+
+              <div className="p-4 border rounded-lg space-y-2">
+                <h4 className="font-medium text-sm">How verification works:</h4>
                 <p className="text-sm text-muted-foreground">
-                  Your source code is now publicly available. To complete verification, you need to verify on Nearblocks.
-                  This confirms your deployed bytecode matches your source code.
+                  When you deploy a contract through NEAR Playground, we store the SHA256 hash
+                  of the compiled WASM bytecode. During verification, we fetch the deployed
+                  bytecode from the blockchain and compare the hashes. If they match, the
+                  contract is verified.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Idle State */}
+          {step === 'idle' && (
+            <div className="space-y-4">
+              <div className="p-4 border rounded-lg space-y-3">
+                <h4 className="font-medium text-sm">How verification works:</h4>
+                <ol className="text-sm text-muted-foreground space-y-2 list-decimal ml-4">
+                  <li>We fetch the deployed bytecode from the NEAR blockchain</li>
+                  <li>Calculate the SHA256 hash of the on-chain bytecode</li>
+                  <li>Compare it with the hash stored when you deployed</li>
+                  <li>If they match, your contract is verified</li>
+                </ol>
+              </div>
+
+              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                 <div className="flex gap-2">
-                  <Button onClick={handleOpenNearblocks} className="flex-1">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Open Nearblocks
-                  </Button>
-                  <Button variant="outline" onClick={handleCheckStatus}>
-                    <ShieldCheck className="h-4 w-4 mr-2" />
-                    Check Status
-                  </Button>
+                  <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    Only contracts deployed through NEAR Playground can be verified.
+                  </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Checking State */}
-          {step === 'checking' && (
-            <div className="space-y-4">
-              {publishResult && (
-                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <div className="flex gap-2 items-start">
-                    <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                        Source code published
-                      </p>
-                      <a
-                        href={publishResult.repo_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-green-600/80 dark:text-green-400/80 hover:underline flex items-center gap-1 truncate"
-                      >
-                        <Github className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{publishResult.repo_url}</span>
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-col items-center py-6 space-y-4">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <div className="text-center">
-                  <p className="font-medium">Verifying contract...</p>
-                  <p className="text-sm text-muted-foreground">
-                    Waiting for SourceScan verification ({pollCount}/30)
-                  </p>
-                </div>
+          {/* Verifying State */}
+          {step === 'verifying' && (
+            <div className="flex flex-col items-center py-8 space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="text-center">
+                <p className="font-medium">Verifying contract...</p>
+                <p className="text-sm text-muted-foreground">
+                  Fetching on-chain bytecode and comparing hashes
+                </p>
               </div>
-
-              {verificationStatus === 'pending' && (
-                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                  <div className="flex gap-2">
-                    <ShieldAlert className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                        Verification in progress
-                      </p>
-                      <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
-                        SourceScan is processing your contract. This may take a few minutes.
-                        You can close this dialog and check back later.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
           {/* Verified State */}
-          {step === 'verified' && (
+          {step === 'verified' && result && (
             <div className="space-y-4">
-              {publishResult && (
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <div className="flex gap-2 items-start">
-                    <Github className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-muted-foreground">Source Repository</p>
-                      <a
-                        href={publishResult.repo_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm hover:underline flex items-center gap-1"
-                      >
-                        <span className="truncate">{publishResult.repo_url}</span>
-                        <ExternalLink className="h-3 w-3 shrink-0" />
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
                 <div className="flex gap-3">
                   <ShieldCheck className="h-6 w-6 text-green-500 shrink-0" />
@@ -329,10 +217,62 @@ export function VerificationModal({
                       Contract Verified!
                     </p>
                     <p className="text-sm text-green-600/80 dark:text-green-400/80 mt-1">
-                      Your contract source code has been verified and matches the deployed bytecode.
-                      It will now show as verified on block explorers.
+                      Your contract bytecode matches the deployed code on-chain.
                     </p>
                   </div>
+                </div>
+              </div>
+
+              {result.verified_at && (
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <div className="text-xs text-muted-foreground mb-1">Verified at</div>
+                  <div className="text-sm">
+                    {new Date(result.verified_at).toLocaleString()}
+                  </div>
+                </div>
+              )}
+
+              {result.compiled_hash && (
+                <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Bytecode Hash</div>
+                    <div className="font-mono text-xs break-all">{result.compiled_hash}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Failed State - Hashes don't match */}
+          {step === 'failed' && result && (
+            <div className="space-y-4">
+              <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                <div className="flex gap-3">
+                  <ShieldAlert className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-orange-600 dark:text-orange-400">
+                      Bytecode Mismatch
+                    </p>
+                    <p className="text-sm text-orange-600/80 dark:text-orange-400/80 mt-1">
+                      The on-chain bytecode does not match your compiled code. This can happen if:
+                    </p>
+                    <ul className="text-sm text-orange-600/80 dark:text-orange-400/80 mt-2 list-disc ml-4">
+                      <li>The contract was modified after compilation</li>
+                      <li>A different version was deployed</li>
+                      <li>The contract was deployed outside NEAR Playground</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Expected (Compiled)</div>
+                  <div className="font-mono text-xs break-all">{result.compiled_hash}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Actual (On-chain)</div>
+                  <div className="font-mono text-xs break-all">{result.onchain_hash}</div>
                 </div>
               </div>
             </div>
@@ -346,7 +286,7 @@ export function VerificationModal({
                   <XCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
                   <div>
                     <p className="font-medium text-red-600 dark:text-red-400">
-                      Verification Failed
+                      Verification Error
                     </p>
                     <p className="text-sm text-red-600/80 dark:text-red-400/80 mt-1">
                       {error}
@@ -372,19 +312,13 @@ export function VerificationModal({
             </>
           )}
 
-          {step === 'publishing' && (
-            <Button variant="outline" onClick={handleClose}>
-              Close
-            </Button>
-          )}
-
-          {step === 'published' && (
-            <Button variant="outline" onClick={handleClose}>
+          {step === 'already_verified' && (
+            <Button onClick={handleClose}>
               Done
             </Button>
           )}
 
-          {step === 'checking' && (
+          {step === 'verifying' && (
             <Button variant="outline" onClick={handleClose}>
               Close
             </Button>
@@ -393,6 +327,12 @@ export function VerificationModal({
           {step === 'verified' && (
             <Button onClick={handleClose}>
               Done
+            </Button>
+          )}
+
+          {step === 'failed' && (
+            <Button variant="outline" onClick={handleClose}>
+              Close
             </Button>
           )}
 

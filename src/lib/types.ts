@@ -47,6 +47,7 @@ export interface DeploymentResult {
   contract_id: string;
   explorer_url: string;
   gas_used?: string;
+  wasm_hash?: string;
   details: {
     network: string;
     block_height: number;
@@ -285,6 +286,17 @@ export interface FaucetRequestResponse {
   explorer_url?: string;
   error?: string;
   next_available_at?: string;
+}
+
+export interface FaucetHistoryItem {
+  id: string;
+  recipient_account: string;
+  amount: number;
+  status: string;
+  transaction_hash?: string;
+  explorer_url?: string;
+  error_message?: string;
+  created_at: string;
 }
 
 // ============================================

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "NEAR Playground",
+  "logo": {
+    "dark": "/images/logo-dark.svg",
+    "light": "/images/logo-light.svg"
+  },
+  "favicon": "/images/favicon.svg",
+  "colors": {
+    "primary": "#00C08B",
+    "light": "#00EC97",
+    "dark": "#00C08B",
+    "anchors": {
+      "from": "#00C08B",
+      "to": "#00EC97"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "Launch App",
+      "url": "https://nearplay.app"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "https://nearplay.app"
+  },
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/nearplay"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": ["introduction", "quickstart"]
+    },
+    {
+      "group": "Features",
+      "pages": [
+        "features/editor",
+        "features/compilation",
+        "features/deployment",
+        "features/contract-ui",
+        "features/templates",
+        "features/verification"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/first-contract",
+        "guides/testing",
+        "guides/wallet"
+      ]
+    },
+    {
+      "group": "Resources",
+      "pages": ["faq", "best-practices"]
+    }
+  ],
+  "footerSocials": {
+    "twitter": "https://twitter.com/nearprotocol",
+    "github": "https://github.com/nearplay"
+  }
+}

@@ -21,7 +21,7 @@ use handlers::{
     filesystem_mkdir_handler, filesystem_move_handler, project_init_handler,
     filesystem_search_handler,
     verification_package_handler, verification_metadata_handler,
-    publish_source_handler, check_verification_status_handler,
+    publish_source_handler, check_verification_status_handler, verify_contract_handler,
     get_wasm_handler,
     github_clone_handler, project_export_handler,
     faucet_request_handler, faucet_status_handler, faucet_history_handler,
@@ -202,6 +202,7 @@ async fn main() -> std::io::Result<()> {
             .route("/api/verification/package", web::post().to(verification_package_handler))
             .route("/api/verification/metadata", web::post().to(verification_metadata_handler))
             .route("/api/verification/status", web::get().to(check_verification_status_handler))
+            .route("/api/verification/verify", web::post().to(verify_contract_handler))
             // Source publishing API route
             .route("/api/source/publish", web::post().to(publish_source_handler))
             // WASM download for wallet-based deployment

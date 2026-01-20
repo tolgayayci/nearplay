@@ -1,9 +1,16 @@
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use anyhow::Result;
+use std::env;
+use anyhow::{Context, Result};
 use zip::ZipWriter;
 use zip::write::FileOptions;
 use walkdir::WalkDir;
+use sha2::{Sha256, Digest};
+use log::{info, warn, error};
+use near_jsonrpc_client::{methods, JsonRpcClient};
+use near_jsonrpc_primitives::types::query::QueryResponseKind;
+use near_primitives::types::AccountId;
+use serde::{Deserialize, Serialize};
 
 /// Verification service for packaging and verifying smart contracts
 pub struct VerificationService {
@@ -276,4 +283,71 @@ fn sanitize_cargo_toml(content: &str) -> String {
     }
 
     result.join("\n")
+}
+
+// ============================================================================
+// Contract Verification Functions (Self-hosted verification)
+// ============================================================================
+
+const DEFAULT_TESTNET_RPC_URL: &str = "https://rpc.testnet.near.org";
+const DEFAULT_MAINNET_RPC_URL: &str = "https://rpc.mainnet.near.org";
+
+/// Calculate SHA256 hash of data and return as prefixed hex string
+pub fn calculate_sha256(data: &[u8]) -> String {
+    let hash = Sha256::digest(data);
+    format!("sha256:{}", hex::encode(hash))
+}
+
+/// Get the RPC URL for a given network
+fn get_rpc_url(network: &str) -> String {
+    match network {
+        "mainnet" => env::var("NEAR_MAINNET_RPC_URL")
+            .unwrap_or_else(|_| DEFAULT_MAINNET_RPC_URL.to_string()),
+        _ => env::var("NEAR_RPC_URL")
+            .unwrap_or_else(|_| DEFAULT_TESTNET_RPC_URL.to_string()),
+    }
+}
+
+/// Fetch the deployed contract bytecode from the NEAR blockchain
+pub async fn fetch_onchain_code(contract_id: &str, network: &str) -> Result<Vec<u8>> {
+    let rpc_url = get_rpc_url(network);
+    let client = JsonRpcClient::connect(&rpc_url);
+
+    let account_id: AccountId = contract_id.parse()
+        .context("Invalid contract ID format")?;
+
+    let request = methods::query::RpcQueryRequest {
+        block_reference: near_primitives::types::BlockReference::latest(),
+        request: near_primitives::views::QueryRequest::ViewCode {
+            account_id,
+        },
+    };
+
+    let response = client.call(request).await
+        .context("Failed to fetch on-chain code")?;
+
+    match response.kind {
+        QueryResponseKind::ViewCode(code) => Ok(code.code),
+        _ => Err(anyhow::anyhow!("Unexpected response type from ViewCode query")),
+    }
+}
+
+/// Get the on-chain bytecode hash for a contract
+/// Returns the hash for frontend to compare with stored compiled hash
+pub async fn get_onchain_hash(contract_id: &str, network: &str) -> Result<String> {
+    info!("Fetching on-chain hash for contract {} on {}", contract_id, network);
+
+    let onchain_code = fetch_onchain_code(contract_id, network).await?;
+    let onchain_hash = calculate_sha256(&onchain_code);
+
+    info!("On-chain hash for {}: {}", contract_id, onchain_hash);
+    Ok(onchain_hash)
+}
+
+/// Result of fetching on-chain hash
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnchainHashResult {
+    pub contract_id: String,
+    pub network: String,
+    pub onchain_hash: String,
 }

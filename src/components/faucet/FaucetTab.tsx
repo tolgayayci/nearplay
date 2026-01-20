@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -38,7 +38,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Turnstile } from '@marsidev/react-turnstile';
 import { getFaucetStatus, requestFaucet } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -89,14 +88,12 @@ export function FaucetTab({ userId }: FaucetTabProps) {
   const [history, setHistory] = useState<FaucetRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [countdown, setCountdown] = useState<string | null>(null);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<{
     success: boolean;
     message: string;
     explorerUrl?: string;
   } | null>(null);
-  const turnstileRef = useRef<any>(null);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -190,20 +187,8 @@ export function FaucetTab({ userId }: FaucetTabProps) {
   }, [status?.next_available_at, status?.can_request]);
 
   const canRequest = status?.can_request ?? true;
-  // Use test key for localhost development, real key for production
-  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const siteKey = isDev ? '1x00000000000000000000AA' : (import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA');
 
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
-    if (!turnstileToken) {
-      toast({
-        title: 'Verification Required',
-        description: 'Please complete the CAPTCHA verification',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     setResult(null);
 
@@ -221,7 +206,7 @@ export function FaucetTab({ userId }: FaucetTabProps) {
 
       if (dbError) throw new Error(dbError.message);
 
-      const response = await requestFaucet(userId, data.recipientAccount, turnstileToken);
+      const response = await requestFaucet(userId, data.recipientAccount);
 
       if (response.success) {
         await supabase
@@ -267,8 +252,6 @@ export function FaucetTab({ userId }: FaucetTabProps) {
       });
     } finally {
       setIsSubmitting(false);
-      setTurnstileToken(null);
-      turnstileRef.current?.reset();
     }
   };
 
@@ -407,21 +390,9 @@ export function FaucetTab({ userId }: FaucetTabProps) {
                   )}
                 />
 
-                {canRequest && (
-                  <div className="flex justify-center">
-                    <Turnstile
-                      ref={turnstileRef}
-                      siteKey={siteKey}
-                      onSuccess={(token) => setTurnstileToken(token)}
-                      onError={() => setTurnstileToken(null)}
-                      onExpire={() => setTurnstileToken(null)}
-                    />
-                  </div>
-                )}
-
                 <Button
                   type="submit"
-                  disabled={!canRequest || isSubmitting || !turnstileToken}
+                  disabled={!canRequest || isSubmitting}
                   className="w-full gap-2 h-11"
                   size="lg"
                 >
@@ -429,11 +400,6 @@ export function FaucetTab({ userId }: FaucetTabProps) {
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Sending...
-                    </>
-                  ) : !turnstileToken && canRequest ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Verifying...
                     </>
                   ) : (
                     <>

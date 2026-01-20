@@ -63,7 +63,7 @@ interface FileExplorerProps {
   userId: string;
   projectId: string;
   projectName?: string;
-  onFileSelect?: (path: string) => void;
+  onFileSelect?: (path: string, lineNumber?: number) => void;
   className?: string;
   selectedFile?: string | null;
   onOpenPackageManager?: () => void;
@@ -399,7 +399,7 @@ export const FileExplorer = forwardRef<FileExplorerRef, FileExplorerProps>(
     // Handle search result click
     const handleSearchResultClick = (result: SearchResult) => {
       setSelectedPath(result.path);
-      onFileSelect?.(result.path);
+      onFileSelect?.(result.path, result.line_number);
       // Optionally clear search after selection
       // clearSearch();
     };
@@ -505,46 +505,60 @@ export const FileExplorer = forwardRef<FileExplorerRef, FileExplorerProps>(
         </div>
 
         {/* Search Bar */}
-        <div className="px-2 py-1.5 border-b">
-          <div className="flex items-center gap-1">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Search files..."
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                onKeyDown={(e) => e.key === 'Escape' && clearSearch()}
-                className="h-7 pl-7 pr-7 text-xs"
-              />
-              {searchQuery && (
-                <button
-                  onClick={clearSearch}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+        <div className="px-2 py-1.5 border-b space-y-1.5">
+          {/* Search Mode Tabs */}
+          <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-md">
+            <button
+              onClick={() => setSearchMode('filename')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors',
+                searchMode === 'filename'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               )}
-            </div>
-            <Button
-              variant={searchMode === 'content' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => setSearchMode(searchMode === 'filename' ? 'content' : 'filename')}
-              title={searchMode === 'filename' ? 'Search by filename' : 'Search in file contents'}
             >
-              <FileSearch className="h-3.5 w-3.5" />
-            </Button>
+              <File className="h-3 w-3" />
+              Files
+            </button>
+            <button
+              onClick={() => setSearchMode('content')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors',
+                searchMode === 'content'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <FileSearch className="h-3 w-3" />
+              Content
+            </button>
           </div>
+
+          {/* Search Input */}
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              type="text"
+              placeholder={searchMode === 'filename' ? 'Search filenames...' : 'Search in file contents...'}
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && clearSearch()}
+              className="h-7 pl-7 pr-7 text-xs"
+            />
+            {searchQuery && (
+              <button
+                onClick={clearSearch}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
           {searchQuery && (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[10px] text-muted-foreground">
-                {isSearching ? 'Searching...' : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''}`}
-              </span>
-              <span className="text-[10px] text-muted-foreground">
-                ({searchMode === 'filename' ? 'Name' : 'Content'})
-              </span>
+            <div className="text-[10px] text-muted-foreground">
+              {isSearching ? 'Searching...' : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''}`}
             </div>
           )}
         </div>

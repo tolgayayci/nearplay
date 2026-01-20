@@ -1,0 +1,21 @@
+[package]
+name = "nearplay-factory"
+version = "1.0.0"
+authors = ["NEAR Playground"]
+edition = "2021"
+description = "Factory contract for deploying user contracts through NEAR Playground"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { version = "5.5", features = ["legacy"] }
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true

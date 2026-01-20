@@ -105,13 +105,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for TerminalWsSession
 
                 // Parse incoming message
                 match serde_json::from_str::<TerminalMessage>(&text) {
-                    Ok(TerminalMessage::Command { command, session_id: _ }) => {
+                    Ok(TerminalMessage::Command { command, session_id: _, rpc_url }) => {
                         // Execute command
                         let service = self.terminal_service.clone();
                         let session_id = self.session_id.clone();
                         let user_id = self.user_id.clone();
                         let project_id = self.project_id.clone();
                         let addr = ctx.address();
+                        let rpc = rpc_url.clone();
 
                         // Spawn async task to execute command
                         actix::spawn(async move {
@@ -126,6 +127,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for TerminalWsSession
                                     &user_id,
                                     &project_id,
                                     &cmd,
+                                    rpc.as_deref(),
                                     tx.clone(),
                                 ).await {
                                     log::error!("Command execution error: {}", e);

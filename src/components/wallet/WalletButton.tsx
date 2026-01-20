@@ -6,6 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import {
   Wallet,
@@ -15,25 +16,39 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
-  Settings,
   Loader2,
   Check,
-  ArrowRightLeft,
+  Globe,
 } from 'lucide-react';
-import { useWallet, formatNearAmount } from '@/contexts/WalletContext';
-import { WalletModeModal } from './WalletModeModal';
-import { NetworkSelector } from './NetworkSelector';
+import { useWallet, formatNearAmount, Network } from '@/contexts/WalletContext';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
-interface WalletButtonProps {
-  onOpenRPCSettings?: () => void;
+// Network indicator dot
+function NetworkDot({ network, className }: { network: Network; className?: string }) {
+  return (
+    <div
+      className={cn(
+        'h-2 w-2 rounded-full',
+        network === 'mainnet' ? 'bg-green-500' : 'bg-muted-foreground',
+        className
+      )}
+    />
+  );
 }
 
-export function WalletButton({ onOpenRPCSettings }: WalletButtonProps) {
+// Truncate address helper
+function truncateAddress(address: string, startChars = 8, endChars = 6): string {
+  if (address.length <= startChars + endChars) return address;
+  return `${address.slice(0, startChars)}...${address.slice(-endChars)}`;
+}
+
+export function WalletButton() {
   const {
     deploymentMode,
+    setDeploymentMode,
     network,
+    setNetwork,
     isConnected,
     accountId,
     accountBalance,
@@ -45,10 +60,11 @@ export function WalletButton({ onOpenRPCSettings }: WalletButtonProps) {
   } = useWallet();
 
   const { toast } = useToast();
-  const [showModeModal, setShowModeModal] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
+  // Handlers
   const handleCopyAddress = () => {
     if (accountId) {
       navigator.clipboard.writeText(accountId);
@@ -82,199 +98,235 @@ export function WalletButton({ onOpenRPCSettings }: WalletButtonProps) {
       console.error('Failed to disconnect:', error);
     } finally {
       setIsDisconnecting(false);
+      setIsOpen(false);
     }
+  };
+
+  const handleSwitchToPlayground = () => {
+    setDeploymentMode('playground');
+    setIsOpen(false);
+  };
+
+  const handleSwitchToWallet = () => {
+    setDeploymentMode('wallet');
+    setNetwork('mainnet'); // External wallets are mainnet-only
+    setIsOpen(false);
+  };
+
+  const handleConnectWallet = () => {
+    setIsOpen(false);
+    connectWallet();
   };
 
   // Loading state
   if (isInitializing) {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 border border-border">
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Loading...</span>
-      </div>
+      <Button variant="outline" size="sm" className="h-9 gap-2" disabled>
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span className="text-sm">Loading...</span>
+      </Button>
     );
   }
 
-  // Playground mode
-  if (deploymentMode === 'playground') {
-    return (
-      <>
-        <button
-          onClick={() => setShowModeModal(true)}
-          className={cn(
-            'group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors',
-            'bg-muted/50 border border-border',
-            'hover:bg-muted hover:border-border'
-          )}
-        >
-          <Zap className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Playground</span>
-          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted border border-border">
-            <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-            <span className="text-[10px] font-medium text-muted-foreground">Testnet</span>
-          </div>
-          <ChevronDown className="h-3 w-3 text-muted-foreground" />
-        </button>
+  // Compute button content
+  const isPlayground = deploymentMode === 'playground';
+  const isWalletConnected = !isPlayground && isConnected && accountId;
+  const isWalletDisconnected = !isPlayground && !isConnected;
 
-        <WalletModeModal open={showModeModal} onOpenChange={setShowModeModal} />
-      </>
-    );
-  }
+  const buttonLabel = isPlayground
+    ? 'Playground'
+    : isWalletConnected
+      ? truncateAddress(accountId!)
+      : 'Connect';
 
-  // Wallet mode - connected
-  if (isConnected && accountId) {
-    const truncatedAddress = accountId.length > 20
-      ? `${accountId.slice(0, 8)}...${accountId.slice(-6)}`
-      : accountId;
-    const formattedBalance = accountBalance
-      ? formatNearAmount(accountBalance.available)
-      : null;
+  const ButtonIcon = isPlayground ? Zap : Wallet;
+  const currentNetwork: Network = isPlayground ? 'testnet' : 'mainnet'; // Wallet mode is always mainnet
+  const formattedBalance = accountBalance ? formatNearAmount(accountBalance.available) : null;
 
-    return (
-      <div className="flex items-center gap-2">
-        <NetworkSelector />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                'group flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-colors',
-                'bg-muted/50 border border-border',
-                'hover:bg-muted'
-              )}
-            >
-              {/* Avatar/Icon */}
-              <div className="flex items-center justify-center h-6 w-6 rounded-full bg-muted border border-border">
-                <Wallet className="h-3 w-3 text-muted-foreground" />
-              </div>
-
-              {/* Account Info */}
+  return (
+    <>
+      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className={cn(
+            "gap-2 px-3",
+            isWalletConnected ? "h-auto py-1.5" : "h-9"
+          )}>
+            <ButtonIcon className="h-4 w-4" />
+            {isWalletConnected ? (
               <div className="flex flex-col items-start">
-                <span className="text-xs font-mono font-medium leading-tight">{truncatedAddress}</span>
+                <span className="text-xs font-mono leading-tight">{buttonLabel}</span>
                 <span className="text-[10px] text-muted-foreground leading-tight">
-                  {isLoadingBalance ? 'Loading...' : formattedBalance ? `${formattedBalance} NEAR` : '--'}
+                  {isLoadingBalance ? 'Loading...' : formattedBalance ? `${formattedBalance} NEAR` : '0 NEAR'}
                 </span>
               </div>
+            ) : (
+              <span className="text-sm font-medium">{buttonLabel}</span>
+            )}
+            <NetworkDot network={currentNetwork} />
+            <ChevronDown className={cn(
+              'h-3 w-3 text-muted-foreground transition-transform',
+              isOpen && 'rotate-180'
+            )} />
+          </Button>
+        </DropdownMenuTrigger>
 
-              <ChevronDown className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
-            </button>
-          </DropdownMenuTrigger>
-
-          <DropdownMenuContent align="end" className="w-72 p-0">
-            {/* Account Header */}
-            <div className="p-4 bg-muted/30 border-b border-border">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-muted border border-border">
-                  <Wallet className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground">Connected Account</p>
-                  <p className="text-sm font-mono truncate">{accountId}</p>
+        <DropdownMenuContent align="end" className="w-72 p-0">
+          {/* ===== PLAYGROUND MODE ===== */}
+          {isPlayground && (
+            <>
+              <div className="p-4 bg-muted/30 border-b">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center h-10 w-10 rounded-full bg-muted border">
+                    <Zap className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Playground Mode</p>
+                    <p className="text-xs text-muted-foreground">Free testnet deployment</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Balance Display */}
-              <div className="mt-3 p-3 rounded-lg bg-background border border-border">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Available Balance</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5"
-                    onClick={refreshBalance}
-                    disabled={isLoadingBalance}
-                  >
-                    <RefreshCw className={cn("h-3 w-3", isLoadingBalance && "animate-spin")} />
-                  </Button>
-                </div>
-                <p className="text-xl font-semibold mt-1">
-                  {isLoadingBalance ? (
-                    <span className="text-muted-foreground text-base">Loading...</span>
-                  ) : formattedBalance ? (
-                    <>
-                      {formattedBalance} <span className="text-sm font-normal text-muted-foreground">NEAR</span>
-                    </>
-                  ) : (
-                    '--'
-                  )}
-                </p>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="p-1.5">
-              <DropdownMenuItem onClick={handleCopyAddress} className="gap-2 rounded-md">
-                {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
-                <span>{copied ? 'Copied!' : 'Copy Address'}</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleViewOnExplorer} className="gap-2 rounded-md">
-                <ExternalLink className="h-4 w-4" />
-                <span>View on Explorer</span>
-              </DropdownMenuItem>
-              {onOpenRPCSettings && (
-                <DropdownMenuItem onClick={onOpenRPCSettings} className="gap-2 rounded-md">
-                  <Settings className="h-4 w-4" />
-                  <span>RPC Settings</span>
+              <div className="p-2">
+                <DropdownMenuItem onClick={handleSwitchToWallet} className="gap-3 p-3 cursor-pointer">
+                  <Wallet className="h-4 w-4" />
+                  <div>
+                    <p className="font-medium">Use External Wallet</p>
+                    <p className="text-xs text-muted-foreground">Connect Meteor or HOT wallet</p>
+                  </div>
                 </DropdownMenuItem>
-              )}
-            </div>
+              </div>
+            </>
+          )}
 
-            <DropdownMenuSeparator className="my-0" />
-
-            <div className="p-1.5">
-              <DropdownMenuItem onClick={() => setShowModeModal(true)} className="gap-2 rounded-md">
-                <ArrowRightLeft className="h-4 w-4" />
-                <span>Switch Mode</span>
-                <div className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted border border-border">
-                  <Zap className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-[10px] text-muted-foreground">Playground</span>
+          {/* ===== WALLET CONNECTED ===== */}
+          {isWalletConnected && (
+            <>
+              {/* Account Header */}
+              <div className="p-4 bg-muted/30 border-b">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center h-10 w-10 rounded-full bg-muted border">
+                    <Wallet className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-muted-foreground">Mainnet</p>
+                      <NetworkDot network="mainnet" />
+                    </div>
+                    <p className="text-sm font-mono truncate">{accountId}</p>
+                  </div>
                 </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleDisconnect}
-                disabled={isDisconnecting}
-                className="gap-2 rounded-md text-destructive focus:text-destructive focus:bg-destructive/10"
-              >
-                {isDisconnecting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <LogOut className="h-4 w-4" />
-                )}
-                <span>Disconnect</span>
-              </DropdownMenuItem>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
 
-        <WalletModeModal open={showModeModal} onOpenChange={setShowModeModal} />
-      </div>
-    );
-  }
+                {/* Balance */}
+                <div className="mt-3 p-3 rounded-lg bg-background border">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Balance</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        refreshBalance();
+                      }}
+                      disabled={isLoadingBalance}
+                    >
+                      <RefreshCw className={cn('h-3 w-3', isLoadingBalance && 'animate-spin')} />
+                    </Button>
+                  </div>
+                  <p className="text-lg font-semibold mt-1">
+                    {isLoadingBalance ? (
+                      <span className="text-muted-foreground text-sm">Loading...</span>
+                    ) : (
+                      <>
+                        {formattedBalance || '0'} <span className="text-sm font-normal text-muted-foreground">NEAR</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
 
-  // Wallet mode - not connected
-  return (
-    <div className="flex items-center gap-2">
-      <NetworkSelector />
+              {/* Actions */}
+              <div className="p-2">
+                <DropdownMenuItem onClick={handleCopyAddress} className="gap-2 cursor-pointer">
+                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                  {copied ? 'Copied!' : 'Copy Address'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleViewOnExplorer} className="gap-2 cursor-pointer">
+                  <ExternalLink className="h-4 w-4" />
+                  View on Explorer
+                </DropdownMenuItem>
+              </div>
 
-      <Button
-        onClick={connectWallet}
-        variant="outline"
-        size="sm"
-        className="gap-2"
-      >
-        <Wallet className="h-4 w-4" />
-        <span>Connect</span>
-      </Button>
+              <DropdownMenuSeparator className="m-0" />
 
-      <button
-        onClick={() => setShowModeModal(true)}
-        className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-      >
-        <Zap className="h-3.5 w-3.5" />
-        <span className="text-xs">Playground</span>
-      </button>
+              <div className="p-2">
+                <DropdownMenuItem onClick={handleSwitchToPlayground} className="gap-3 p-3 cursor-pointer">
+                  <Zap className="h-4 w-4" />
+                  <div>
+                    <p className="font-medium">Switch to Playground</p>
+                    <p className="text-xs text-muted-foreground">Free testnet deployment</p>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleDisconnect}
+                  disabled={isDisconnecting}
+                  className="gap-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+                >
+                  {isDisconnecting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <LogOut className="h-4 w-4" />
+                  )}
+                  Disconnect
+                </DropdownMenuItem>
+              </div>
+            </>
+          )}
 
-      <WalletModeModal open={showModeModal} onOpenChange={setShowModeModal} />
-    </div>
+          {/* ===== WALLET DISCONNECTED ===== */}
+          {isWalletDisconnected && (
+            <>
+              <div className="p-4 bg-muted/30 border-b">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center h-10 w-10 rounded-full bg-muted border">
+                    <Wallet className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">Mainnet Only</p>
+                      <NetworkDot network="mainnet" />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Connect your wallet</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Wallet Options */}
+              <div className="p-2 border-b">
+                <DropdownMenuItem onClick={() => handleConnectWallet()} className="gap-3 p-3 cursor-pointer">
+                  <Globe className="h-4 w-4" />
+                  <div>
+                    <p className="font-medium">Connect Wallet</p>
+                    <p className="text-xs text-muted-foreground">Meteor, HOT and more</p>
+                  </div>
+                </DropdownMenuItem>
+              </div>
+
+              {/* Testnet info */}
+              <div className="p-2">
+                <DropdownMenuItem onClick={handleSwitchToPlayground} className="gap-3 p-3 cursor-pointer">
+                  <Zap className="h-4 w-4" />
+                  <div>
+                    <p className="font-medium">Need Testnet?</p>
+                    <p className="text-xs text-muted-foreground">Use Playground - free & unlimited</p>
+                  </div>
+                </DropdownMenuItem>
+              </div>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }

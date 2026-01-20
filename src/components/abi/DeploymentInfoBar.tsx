@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { Rocket, Globe, ExternalLink, ShieldCheck, ShieldX, Loader2 } from 'lucide-react';
+import { Rocket, Globe, ExternalLink, ShieldCheck, ShieldX } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
@@ -9,47 +8,24 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Deployment } from '@/lib/types';
-import { checkVerificationStatus, type VerificationStatus, getExplorerUrl } from '@/lib/verification';
+import { getExplorerUrl } from '@/lib/verification';
 
 interface DeploymentInfoBarProps {
   deployment: Deployment;
   onVerifyClick?: () => void;
-  refreshKey?: number; // Change this to trigger verification status refresh
 }
 
 export function DeploymentInfoBar({
   deployment,
   onVerifyClick,
-  refreshKey = 0,
 }: DeploymentInfoBarProps) {
-  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus | null>(null);
-  const [isCheckingVerification, setIsCheckingVerification] = useState(true);
-
   // Determine network from chain_name or chain_id
   const network: 'testnet' | 'mainnet' =
     deployment.chain_name?.toLowerCase().includes('mainnet') ? 'mainnet' : 'testnet';
 
-  // Check verification status
-  useEffect(() => {
-    const checkStatus = async () => {
-      if (!deployment.contract_address) {
-        setIsCheckingVerification(false);
-        return;
-      }
-
-      try {
-        setIsCheckingVerification(true);
-        const status = await checkVerificationStatus(deployment.contract_address, network);
-        setVerificationStatus(status);
-      } catch {
-        setVerificationStatus({ verified: false });
-      } finally {
-        setIsCheckingVerification(false);
-      }
-    };
-
-    checkStatus();
-  }, [deployment.contract_address, network, refreshKey]);
+  // Read verification status from deployment metadata (stored in Supabase)
+  const isVerified = deployment.metadata?.verified === true;
+  const verifiedAt = deployment.metadata?.verified_at as string | undefined;
 
   const explorerUrl = getExplorerUrl(deployment.contract_address, network);
 
@@ -102,39 +78,28 @@ export function DeploymentInfoBar({
       </TooltipProvider>
 
       {/* Verification Badge */}
-      {isCheckingVerification ? (
-        <Badge variant="secondary" className="gap-1.5">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Checking...
-        </Badge>
-      ) : verificationStatus?.verified ? (
+      {isVerified ? (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <a
-                href={verificationStatus.verification_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex"
+              <Badge
+                variant="secondary"
+                className="gap-1.5 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15 border-green-500/20 cursor-pointer"
+                onClick={onVerifyClick}
               >
-                <Badge
-                  variant="secondary"
-                  className="gap-1.5 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15 border-green-500/20 cursor-pointer"
-                >
-                  <ShieldCheck className="h-3 w-3" />
-                  Verified
-                </Badge>
-              </a>
+                <ShieldCheck className="h-3 w-3" />
+                Verified
+              </Badge>
             </TooltipTrigger>
             <TooltipContent>
               <div className="space-y-1">
-                <p className="font-medium">Source Code Verified</p>
-                {verificationStatus.verification_date && (
+                <p className="font-medium">Verified by NEAR Playground</p>
+                {verifiedAt && (
                   <p className="text-xs text-muted-foreground">
-                    Verified on {new Date(verificationStatus.verification_date).toLocaleDateString()}
+                    Verified on {new Date(verifiedAt).toLocaleDateString()}
                   </p>
                 )}
-                <p className="text-xs text-muted-foreground">Click to view on SourceScan</p>
+                <p className="text-xs text-muted-foreground">Click for details</p>
               </div>
             </TooltipContent>
           </Tooltip>

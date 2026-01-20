@@ -170,11 +170,23 @@ export function ProjectsPage() {
         });
       }
 
-      // Wallet filter
+      // Wallet filter - use same logic as display function for consistency
       if (walletFilter !== 'all') {
         filtered = filtered.filter(d => {
           const walletType = d.metadata?.wallet_type;
-          return walletType === walletFilter;
+
+          // Determine effective wallet type (matching DeploymentList display logic)
+          let effectiveType: string;
+          if (walletType === 'external') {
+            effectiveType = 'external';
+          } else if (walletType === 'playground') {
+            effectiveType = 'playground';
+          } else {
+            // Legacy deployments without wallet_type default to playground
+            effectiveType = 'playground';
+          }
+
+          return effectiveType === walletFilter;
         });
       }
 

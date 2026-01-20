@@ -8,8 +8,10 @@ use near_primitives::transaction::{Action, TransferAction};
 use near_crypto::{SecretKey, InMemorySigner, Signer};
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc, Duration};
 
 const DEFAULT_TESTNET_RPC_URL: &str = "https://rpc.testnet.near.org";
+const RATE_LIMIT_HOURS: i64 = 24;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FaucetTransferResult {
@@ -17,6 +19,19 @@ pub struct FaucetTransferResult {
     pub transaction_hash: Option<String>,
     pub explorer_url: Option<String>,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitInfo {
+    pub can_request: bool,
+    pub last_request_at: Option<String>,
+    pub next_available_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SupabaseFaucetRequest {
+    created_at: String,
+    status: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -249,4 +264,139 @@ pub async fn get_faucet_balance() -> Result<f64> {
         }
         _ => Err(anyhow::anyhow!("Unexpected query response")),
     }
+}
+
+/// Checks if a user is rate limited for faucet requests (24 hour limit)
+/// Returns RateLimitInfo with can_request=true if allowed, or false with next_available_at if limited
+pub async fn check_rate_limit(user_id: &str) -> Result<RateLimitInfo> {
+    let supabase_url = env::var("SUPABASE_URL")
+        .context("SUPABASE_URL not found in environment")?;
+    let supabase_key = env::var("SUPABASE_SERVICE_ROLE_KEY")
+        .context("SUPABASE_SERVICE_ROLE_KEY not found in environment")?;
+
+    let client = reqwest::Client::new();
+
+    // Query the last successful faucet request for this user
+    let url = format!(
+        "{}/rest/v1/faucet_requests?user_id=eq.{}&status=eq.success&order=created_at.desc&limit=1",
+        supabase_url, user_id
+    );
+
+    let response = client
+        .get(&url)
+        .header("apikey", &supabase_key)
+        .header("Authorization", format!("Bearer {}", supabase_key))
+        .send()
+        .await
+        .context("Failed to query faucet requests")?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        error!("Supabase query failed: {} - {}", status, body);
+        return Err(anyhow::anyhow!("Failed to check rate limit: {}", status));
+    }
+
+    let requests: Vec<SupabaseFaucetRequest> = response
+        .json()
+        .await
+        .context("Failed to parse faucet requests response")?;
+
+    if requests.is_empty() {
+        // No previous requests, allow
+        return Ok(RateLimitInfo {
+            can_request: true,
+            last_request_at: None,
+            next_available_at: None,
+        });
+    }
+
+    // Parse the last request timestamp
+    let last_request = &requests[0];
+    let last_request_time = DateTime::parse_from_rfc3339(&last_request.created_at)
+        .context("Failed to parse last request timestamp")?
+        .with_timezone(&Utc);
+
+    let next_available = last_request_time + Duration::hours(RATE_LIMIT_HOURS);
+    let now = Utc::now();
+
+    if now >= next_available {
+        // Rate limit expired, allow
+        Ok(RateLimitInfo {
+            can_request: true,
+            last_request_at: Some(last_request.created_at.clone()),
+            next_available_at: None,
+        })
+    } else {
+        // Still rate limited
+        info!(
+            "User {} is rate limited. Last request: {}, Next available: {}",
+            user_id, last_request.created_at, next_available.to_rfc3339()
+        );
+        Ok(RateLimitInfo {
+            can_request: false,
+            last_request_at: Some(last_request.created_at.clone()),
+            next_available_at: Some(next_available.to_rfc3339()),
+        })
+    }
+}
+
+/// Gets the last N faucet requests for a user
+pub async fn get_faucet_history(user_id: &str, limit: usize) -> Result<Vec<crate::models::FaucetHistoryItem>> {
+    let supabase_url = env::var("SUPABASE_URL")
+        .context("SUPABASE_URL not found in environment")?;
+    let supabase_key = env::var("SUPABASE_SERVICE_ROLE_KEY")
+        .context("SUPABASE_SERVICE_ROLE_KEY not found in environment")?;
+
+    let client = reqwest::Client::new();
+
+    let url = format!(
+        "{}/rest/v1/faucet_requests?user_id=eq.{}&order=created_at.desc&limit={}",
+        supabase_url, user_id, limit
+    );
+
+    let response = client
+        .get(&url)
+        .header("apikey", &supabase_key)
+        .header("Authorization", format!("Bearer {}", supabase_key))
+        .send()
+        .await
+        .context("Failed to query faucet history")?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        error!("Supabase query failed: {} - {}", status, body);
+        return Err(anyhow::anyhow!("Failed to get faucet history: {}", status));
+    }
+
+    #[derive(Deserialize)]
+    struct SupabaseHistoryItem {
+        id: String,
+        recipient_account: String,
+        amount: f64,
+        status: String,
+        transaction_hash: Option<String>,
+        error_message: Option<String>,
+        created_at: String,
+    }
+
+    let items: Vec<SupabaseHistoryItem> = response
+        .json()
+        .await
+        .context("Failed to parse faucet history response")?;
+
+    Ok(items.into_iter().map(|item| {
+        let explorer_url = item.transaction_hash.as_ref().map(|tx| format!("https://testnet.nearblocks.io/txns/{}", tx));
+        crate::models::FaucetHistoryItem {
+            id: item.id,
+            recipient_account: item.recipient_account,
+            amount: item.amount,
+            status: item.status,
+            transaction_hash: item.transaction_hash,
+            explorer_url,
+            error_message: item.error_message,
+            created_at: item.created_at,
+        }
+    }).collect())
 }

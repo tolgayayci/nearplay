@@ -248,7 +248,7 @@ export function TemplateDetailDialog({
   // Handle share
   const handleShare = () => {
     if (!template) return;
-    const url = `${window.location.origin}/templates/${template.id}`;
+    const url = `${window.location.origin}/templates?t=${template.id}`;
     navigator.clipboard.writeText(url);
     toast({
       title: 'Link copied',

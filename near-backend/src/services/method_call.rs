@@ -12,21 +12,25 @@ use near_crypto::{SecretKey, InMemorySigner, Signer};
 use std::str::FromStr;
 use base64::{Engine as _, engine::general_purpose};
 
-const TESTNET_RPC_URL: &str = "https://rpc.testnet.near.org";
+const DEFAULT_TESTNET_RPC_URL: &str = "https://rpc.testnet.near.org";
 
 pub async fn call_contract_method(
     contract_address: &str,
     method_name: &str,
     args: &Value,
     method_type: &str,
+    rpc_url: Option<&str>,
 ) -> Result<MethodCallResponse> {
+    // Use provided RPC URL or fallback to default
+    let effective_rpc_url = rpc_url.unwrap_or(DEFAULT_TESTNET_RPC_URL);
+
     info!(
-        "Calling {} method '{}' on contract: {}",
-        method_type, method_name, contract_address
+        "Calling {} method '{}' on contract: {} via RPC: {}",
+        method_type, method_name, contract_address, effective_rpc_url
     );
 
     // Create JSON-RPC client
-    let client = JsonRpcClient::connect(TESTNET_RPC_URL);
+    let client = JsonRpcClient::connect(effective_rpc_url);
 
     if method_type == "view" {
         // Execute view method (read-only, no transaction needed)

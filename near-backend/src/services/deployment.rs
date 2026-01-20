@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::env;
 use crate::models::{DeployDetails, DeployResponse};
 use crate::services::compilation::{update_cargo_toml_repository, recompile_project};
+use crate::services::verification::calculate_sha256;
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_primitives::types::AccountId;
@@ -120,6 +121,7 @@ pub async fn deploy_contract(
     let transaction_hash: String;
     let block_height: u64;
     let gas_used: String;
+    let wasm_hash: String;
 
     if !account_exists {
         info!("Creating new subaccount: {}", subaccount_id);
@@ -266,6 +268,10 @@ pub async fn deploy_contract(
         transaction_hash = tx_result.transaction.hash.to_string();
         info!("Contract deployed successfully: {}", transaction_hash);
 
+        // Calculate WASM hash for verification (returned to frontend for storage)
+        wasm_hash = calculate_sha256(&wasm_code);
+        info!("WASM hash for verification: {}", wasm_hash);
+
         block_height = tx_result.transaction_outcome.block_hash.as_bytes()
             .iter()
             .take(8)
@@ -324,6 +330,7 @@ pub async fn deploy_contract(
             deployer_account: parent_account_id.clone(),
         },
         github_repo_url: Some(repo_url),
+        wasm_hash: Some(wasm_hash),
     };
 
     info!(

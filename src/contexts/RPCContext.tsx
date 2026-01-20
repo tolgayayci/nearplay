@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 
 export interface RPCProvider {
   id: string;
@@ -53,8 +53,8 @@ export const DEFAULT_PROVIDERS: RPCProvider[] = [
   {
     id: 'lava',
     name: 'Lava Network',
-    testnetUrl: 'https://near-testnet.lava.build',
-    mainnetUrl: 'https://near.lava.build',
+    testnetUrl: 'https://neart.lava.build:443',
+    mainnetUrl: 'https://near.lava.build:443',
   },
 ];
 
@@ -94,8 +94,8 @@ export function RPCProvider({ children }: RPCProviderProps) {
 
   const [connectionStatus, setConnectionStatus] = useState<Record<string, ConnectionStatus>>({});
 
-  // All providers combined
-  const providers = [...DEFAULT_PROVIDERS, ...customProviders];
+  // All providers combined - memoized to prevent unnecessary re-renders
+  const providers = useMemo(() => [...DEFAULT_PROVIDERS, ...customProviders], [customProviders]);
 
   // Persist to localStorage
   useEffect(() => {
@@ -170,13 +170,105 @@ export function RPCProvider({ children }: RPCProviderProps) {
     await Promise.all(promises);
   }, [providers, testConnection]);
 
-  // Set provider for a network
+  // Refs to avoid infinite loops in the interval effect
+  const selectedTestnetRef = useRef(selectedTestnetProvider);
+  const selectedMainnetRef = useRef(selectedMainnetProvider);
+  const providersRef = useRef(providers);
+
+  // Keep refs in sync
+  useEffect(() => {
+    selectedTestnetRef.current = selectedTestnetProvider;
+    selectedMainnetRef.current = selectedMainnetProvider;
+    providersRef.current = providers;
+  }, [selectedTestnetProvider, selectedMainnetProvider, providers]);
+
+  // Auto-test current provider every minute
+  useEffect(() => {
+    // Test function that uses refs
+    const testCurrentProviders = async () => {
+      const testnetProvider = providersRef.current.find(p => p.id === selectedTestnetRef.current);
+      const mainnetProvider = providersRef.current.find(p => p.id === selectedMainnetRef.current);
+
+      if (testnetProvider) {
+        const startTime = Date.now();
+        try {
+          const response = await fetch(testnetProvider.testnetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 'test', method: 'status', params: [] }),
+          });
+          const latency = Date.now() - startTime;
+          setConnectionStatus(prev => ({
+            ...prev,
+            [`${testnetProvider.id}-testnet`]: {
+              connected: response.ok,
+              latency: response.ok ? latency : null,
+              lastChecked: Date.now(),
+            },
+          }));
+        } catch {
+          setConnectionStatus(prev => ({
+            ...prev,
+            [`${testnetProvider.id}-testnet`]: { connected: false, latency: null, lastChecked: Date.now() },
+          }));
+        }
+      }
+
+      if (mainnetProvider) {
+        const startTime = Date.now();
+        try {
+          const response = await fetch(mainnetProvider.mainnetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 'test', method: 'status', params: [] }),
+          });
+          const latency = Date.now() - startTime;
+          setConnectionStatus(prev => ({
+            ...prev,
+            [`${mainnetProvider.id}-mainnet`]: {
+              connected: response.ok,
+              latency: response.ok ? latency : null,
+              lastChecked: Date.now(),
+            },
+          }));
+        } catch {
+          setConnectionStatus(prev => ({
+            ...prev,
+            [`${mainnetProvider.id}-mainnet`]: { connected: false, latency: null, lastChecked: Date.now() },
+          }));
+        }
+      }
+    };
+
+    // Initial test after a short delay
+    const initialTimeout = setTimeout(testCurrentProviders, 1000);
+
+    // Set up interval for every 60 seconds
+    const interval = setInterval(testCurrentProviders, 60000);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
+  }, []); // Empty deps - uses refs
+
+  // Ref for testConnection to avoid dependency issues
+  const testConnectionRef = useRef(testConnection);
+  useEffect(() => {
+    testConnectionRef.current = testConnection;
+  }, [testConnection]);
+
+  // Set provider for a network and test it immediately
   const setProvider = useCallback((network: 'testnet' | 'mainnet', providerId: string) => {
     if (network === 'testnet') {
       setSelectedTestnetProvider(providerId);
     } else {
       setSelectedMainnetProvider(providerId);
     }
+    // Test the new provider immediately using ref to avoid dependency
+    setTimeout(() => {
+      testConnectionRef.current(providerId, network);
+    }, 0);
   }, []);
 
   // Add custom provider
@@ -222,21 +314,37 @@ export function RPCProvider({ children }: RPCProviderProps) {
     return providers.find(p => p.id === providerId);
   }, [providers]);
 
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    providers,
+    customProviders,
+    selectedTestnetProvider,
+    selectedMainnetProvider,
+    connectionStatus,
+    setProvider,
+    addCustomProvider,
+    removeCustomProvider,
+    testConnection,
+    testAllConnections,
+    getCurrentRpcUrl,
+    getProviderById,
+  }), [
+    providers,
+    customProviders,
+    selectedTestnetProvider,
+    selectedMainnetProvider,
+    connectionStatus,
+    setProvider,
+    addCustomProvider,
+    removeCustomProvider,
+    testConnection,
+    testAllConnections,
+    getCurrentRpcUrl,
+    getProviderById,
+  ]);
+
   return (
-    <RPCContext.Provider value={{
-      providers,
-      customProviders,
-      selectedTestnetProvider,
-      selectedMainnetProvider,
-      connectionStatus,
-      setProvider,
-      addCustomProvider,
-      removeCustomProvider,
-      testConnection,
-      testAllConnections,
-      getCurrentRpcUrl,
-      getProviderById,
-    }}>
+    <RPCContext.Provider value={contextValue}>
       {children}
     </RPCContext.Provider>
   );

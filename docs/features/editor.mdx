@@ -1,0 +1,62 @@
+---
+title: Code Editor
+description: Write Rust smart contracts with a powerful browser-based editor
+---
+
+# Code Editor
+
+NEAR Playground uses Monaco Editor (the same engine as VS Code) for a familiar coding experience.
+
+<img src="/images/editor.png" alt="Code editor" />
+
+## Features
+
+### Syntax Highlighting
+
+Full Rust syntax highlighting with proper coloring for:
+- Keywords (`pub`, `fn`, `struct`, `impl`)
+- Types (`String`, `u128`, `Vec`)
+- NEAR macros (`#[near]`, `#[payable]`)
+- Comments and strings
+
+### Auto-Save
+
+Your code saves automatically as you type. No need to manually save - just close the browser and come back later.
+
+### Keyboard Shortcuts
+
+| Action | Shortcut |
+|--------|----------|
+| Save | `Ctrl/Cmd + S` |
+| Find | `Ctrl/Cmd + F` |
+| Replace | `Ctrl/Cmd + H` |
+| Comment line | `Ctrl/Cmd + /` |
+| Format | `Shift + Alt + F` |
+
+### Error Highlighting
+
+When you compile, errors appear directly in the editor:
+- Red underlines on problematic lines
+- Hover to see the error message
+- Click to jump to the error location
+
+<img src="/images/error-highlight.png" alt="Error highlighting" />
+
+## Editor Layout
+
+The editor takes up the main area of the screen. On the right side, you'll find:
+
+- **Compile** button
+- **Deploy** button
+- **Output** panel (compilation logs)
+- **Contract Interface** (after deployment)
+
+## Tips
+
+<Tip>
+Use `Ctrl/Cmd + Space` to trigger auto-completion suggestions.
+</Tip>
+
+<Tip>
+The editor remembers your cursor position and scroll state between sessions.
+</Tip>

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/App';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +26,7 @@ import {
   createTemplateFromGitHub,
   createTemplateFromProject,
 } from '@/lib/templates-api';
-import type { Project, TemplateDifficulty, TemplateSourceType } from '@/lib/types';
+import type { Project, Template, TemplateDifficulty, TemplateSourceType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import {
   Loader2,
@@ -44,11 +42,13 @@ import {
   MessageCircle,
   FileCode,
 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface PublishTemplateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   preSelectedProjectId?: string;
+  onSuccess?: (template: Template) => void;
 }
 
 const CATEGORIES = [
@@ -78,6 +78,7 @@ export function PublishTemplateDialog({
   open,
   onOpenChange,
   preSelectedProjectId,
+  onSuccess,
 }: PublishTemplateDialogProps) {
   const [sourceType, setSourceType] = useState<TemplateSourceType>('project');
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
@@ -99,7 +100,6 @@ export function PublishTemplateDialog({
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
-  const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -243,7 +243,9 @@ export function PublishTemplateDialog({
       });
 
       onOpenChange(false);
-      navigate(`/templates/${template.id}`);
+      if (onSuccess) {
+        onSuccess(template);
+      }
     } catch (error) {
       console.error('Error publishing template:', error);
       toast({
@@ -259,38 +261,33 @@ export function PublishTemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Publish Template</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="pb-2">
+          <DialogTitle className="text-lg">Publish Template</DialogTitle>
+          <DialogDescription className="text-sm">
             Share your project as a template for the community
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-4 py-2">
           {/* Source Selection */}
-          <div className="space-y-3">
-            <Label>Source</Label>
-            <RadioGroup
+          <div className="space-y-2">
+            <Tabs
               value={sourceType}
               onValueChange={(value) => setSourceType(value as TemplateSourceType)}
-              className="flex gap-4"
+              className="w-full"
             >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="project" id="project" />
-                <Label htmlFor="project" className="flex items-center gap-2 cursor-pointer">
+              <TabsList className="w-full grid grid-cols-2">
+                <TabsTrigger value="project" className="gap-2">
                   <FolderOpen className="h-4 w-4" />
-                  From my project
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="github" id="github" />
-                <Label htmlFor="github" className="flex items-center gap-2 cursor-pointer">
+                  My Project
+                </TabsTrigger>
+                <TabsTrigger value="github" className="gap-2">
                   <Github className="h-4 w-4" />
-                  From GitHub
-                </Label>
-              </div>
-            </RadioGroup>
+                  GitHub
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
 
             {/* Project Selector */}
             {sourceType === 'project' && (
@@ -299,7 +296,7 @@ export function PublishTemplateDialog({
                 onValueChange={setSelectedProjectId}
                 disabled={isLoadingProjects}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-9 mt-2">
                   <SelectValue placeholder="Select a project..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -314,19 +311,21 @@ export function PublishTemplateDialog({
 
             {/* GitHub URL Input */}
             {sourceType === 'github' && (
-              <div className="space-y-3">
+              <div className="space-y-2 mt-2">
                 <Input
                   value={githubUrl}
                   onChange={(e) => setGithubUrl(e.target.value)}
                   placeholder="https://github.com/owner/repo"
+                  className="h-9"
                 />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label className="text-xs text-muted-foreground">Branch</Label>
                     <Input
                       value={githubBranch}
                       onChange={(e) => setGithubBranch(e.target.value)}
                       placeholder="main"
+                      className="h-9"
                     />
                   </div>
                   <div>
@@ -337,6 +336,7 @@ export function PublishTemplateDialog({
                       value={githubPath}
                       onChange={(e) => setGithubPath(e.target.value)}
                       placeholder="contracts/token"
+                      className="h-9"
                     />
                   </div>
                 </div>
@@ -345,8 +345,8 @@ export function PublishTemplateDialog({
           </div>
 
           {/* Template Name */}
-          <div className="space-y-2">
-            <Label htmlFor="name">Name *</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="name" className="text-sm">Name *</Label>
             <Input
               id="name"
               value={name}
@@ -357,24 +357,24 @@ export function PublishTemplateDialog({
           </div>
 
           {/* Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="description" className="text-sm">Description</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe what this template does and when to use it..."
               disabled={isPublishing}
-              rows={3}
+              rows={2}
             />
           </div>
 
           {/* Category and Difficulty */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Category</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm">Category</Label>
               <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger>
+                <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -386,13 +386,13 @@ export function PublishTemplateDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Difficulty</Label>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Difficulty</Label>
               <Select
                 value={difficulty}
                 onValueChange={(v) => setDifficulty(v as TemplateDifficulty)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -406,10 +406,10 @@ export function PublishTemplateDialog({
             </div>
           </div>
 
-          {/* Icon Selection */}
-          <div className="space-y-2">
-            <Label>Icon</Label>
-            <div className="flex flex-wrap gap-2">
+          {/* Icon */}
+          <div className="space-y-1.5">
+            <Label className="text-sm">Icon</Label>
+            <div className="flex flex-wrap gap-1.5">
               {ICONS.map(({ value, icon: Icon, label }) => (
                 <button
                   key={value}
@@ -423,15 +423,15 @@ export function PublishTemplateDialog({
                   )}
                   title={label}
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-4 w-4" />
                 </button>
               ))}
             </div>
           </div>
 
           {/* Tags */}
-          <div className="space-y-2">
-            <Label>Tags</Label>
+          <div className="space-y-1.5">
+            <Label className="text-sm">Tags</Label>
             <div className="flex gap-2">
               <Input
                 value={tagInput}
@@ -439,23 +439,26 @@ export function PublishTemplateDialog({
                 onKeyDown={handleKeyDown}
                 placeholder="Add a tag..."
                 disabled={isPublishing || tags.length >= 10}
+                className="h-9"
               />
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={handleAddTag}
                 disabled={!tagInput.trim() || tags.length >= 10}
+                className="h-9 px-3"
               >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
             {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex flex-wrap gap-1">
                 {tags.map((tag) => (
                   <Badge
                     key={tag}
                     variant="secondary"
-                    className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
+                    className="cursor-pointer text-xs hover:bg-destructive hover:text-destructive-foreground"
                     onClick={() => handleRemoveTag(tag)}
                   >
                     {tag}
@@ -464,28 +467,26 @@ export function PublishTemplateDialog({
                 ))}
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
-              Press Enter to add a tag. Click a tag to remove it.
-            </p>
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="pt-2">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => onOpenChange(false)}
             disabled={isPublishing}
           >
             Cancel
           </Button>
-          <Button onClick={handlePublish} disabled={isPublishing}>
+          <Button size="sm" onClick={handlePublish} disabled={isPublishing}>
             {isPublishing ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Publishing...
               </>
             ) : (
-              'Publish Template'
+              'Publish'
             )}
           </Button>
         </DialogFooter>

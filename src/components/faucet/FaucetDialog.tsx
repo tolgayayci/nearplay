@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -20,8 +20,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Turnstile } from '@marsidev/react-turnstile';
-import { getFaucetStatus, requestFaucet } from '@/lib/api';
+import { getFaucetStatus, requestFaucet, getFaucetHistory } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -32,8 +31,10 @@ import {
   AlertCircle,
   ExternalLink,
   Clock,
+  History,
 } from 'lucide-react';
-import type { FaucetStatusResponse } from '@/lib/types';
+import type { FaucetStatusResponse, FaucetHistoryItem } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
 
 const formSchema = z.object({
   recipientAccount: z
@@ -51,14 +52,13 @@ interface FaucetDialogProps {
 export function FaucetDialog({ open, onOpenChange, userId }: FaucetDialogProps) {
   const [status, setStatus] = useState<FaucetStatusResponse | null>(null);
   const [countdown, setCountdown] = useState<string | null>(null);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [history, setHistory] = useState<FaucetHistoryItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<{
     success: boolean;
     message: string;
     explorerUrl?: string;
   } | null>(null);
-  const turnstileRef = useRef<any>(null);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -85,8 +85,12 @@ export function FaucetDialog({ open, onOpenChange, userId }: FaucetDialogProps) 
 
   const fetchStatus = async () => {
     try {
-      const faucetStatus = await getFaucetStatus(userId);
+      const [faucetStatus, faucetHistory] = await Promise.all([
+        getFaucetStatus(userId),
+        getFaucetHistory(userId, 3),
+      ]);
       setStatus(faucetStatus);
+      setHistory(faucetHistory);
     } catch (error) {
       console.error('Failed to fetch faucet status:', error);
     }
@@ -123,19 +127,8 @@ export function FaucetDialog({ open, onOpenChange, userId }: FaucetDialogProps) 
   }, [status?.next_available_at, status?.can_request]);
 
   const canRequest = status?.can_request ?? true;
-  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const siteKey = isDev ? '1x00000000000000000000AA' : (import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA');
 
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
-    if (!turnstileToken) {
-      toast({
-        title: 'Verification Required',
-        description: 'Please complete the CAPTCHA verification',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     setResult(null);
 
@@ -153,7 +146,7 @@ export function FaucetDialog({ open, onOpenChange, userId }: FaucetDialogProps) 
 
       if (dbError) throw new Error(dbError.message);
 
-      const response = await requestFaucet(userId, data.recipientAccount, turnstileToken);
+      const response = await requestFaucet(userId, data.recipientAccount);
 
       if (response.success) {
         await supabase
@@ -198,8 +191,6 @@ export function FaucetDialog({ open, onOpenChange, userId }: FaucetDialogProps) 
       });
     } finally {
       setIsSubmitting(false);
-      setTurnstileToken(null);
-      turnstileRef.current?.reset();
     }
   };
 
@@ -244,18 +235,6 @@ export function FaucetDialog({ open, onOpenChange, userId }: FaucetDialogProps) 
               </div>
             )}
 
-            {canRequest && !result?.success && (
-              <div className="flex justify-center">
-                <Turnstile
-                  ref={turnstileRef}
-                  siteKey={siteKey}
-                  onSuccess={(token) => setTurnstileToken(token)}
-                  onError={() => setTurnstileToken(null)}
-                  onExpire={() => setTurnstileToken(null)}
-                />
-              </div>
-            )}
-
             {result && (
               <Alert variant={result.success ? 'default' : 'destructive'} className={cn(
                 result.success && "border-green-500/20 bg-green-500/5"
@@ -285,18 +264,13 @@ export function FaucetDialog({ open, onOpenChange, userId }: FaucetDialogProps) 
             {!result?.success && (
               <Button
                 type="submit"
-                disabled={!canRequest || isSubmitting || !turnstileToken}
+                disabled={!canRequest || isSubmitting}
                 className="w-full gap-2"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Sending...
-                  </>
-                ) : !turnstileToken && canRequest ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Verifying...
                   </>
                 ) : (
                   <>
@@ -319,6 +293,51 @@ export function FaucetDialog({ open, onOpenChange, userId }: FaucetDialogProps) 
             )}
           </form>
         </Form>
+
+        {/* Recent Requests History */}
+        {history.length > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="text-sm font-medium flex items-center gap-2 mb-3">
+              <History className="h-4 w-4" />
+              Recent Requests
+            </h4>
+            <div className="space-y-2">
+              {history.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/50"
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono truncate max-w-[150px]">
+                      {item.recipient_account}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {new Date(item.created_at).toLocaleDateString()} {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={item.status === 'success' ? 'default' : item.status === 'pending' ? 'secondary' : 'destructive'}
+                      className="text-[10px] px-1.5"
+                    >
+                      {item.status}
+                    </Badge>
+                    {item.explorer_url && (
+                      <a
+                        href={item.explorer_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

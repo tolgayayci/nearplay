@@ -7,7 +7,6 @@ import { ProjectsPage } from '@/pages/ProjectsPage';
 import { EditorPage } from '@/pages/EditorPage';
 import { SharedProjectPage } from '@/pages/SharedProjectPage';
 import { TemplatesPage } from '@/pages/TemplatesPage';
-import { TemplateDetailPage } from '@/pages/TemplateDetailPage';
 import { EmbedPage } from '@/pages/EmbedPage';
 import { EmbedsPage } from '@/pages/EmbedsPage';
 import { GAPageView } from '@/components/analytics/GAPageView';
@@ -413,7 +412,6 @@ function AppContent() {
 
             {/* Templates - semi-public (can browse, need auth to use) */}
             <Route path="/templates" element={<TemplatesPage />} />
-            <Route path="/templates/:id" element={<TemplateDetailPage />} />
 
             {/* Embeds management - protected */}
             <Route path="/embeds" element={

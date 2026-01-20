@@ -22,11 +22,12 @@ import {
 import { Deployment } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { getExplorerAccountUrl } from '@/lib/config';
 import { DeploymentInfoBar } from './DeploymentInfoBar';
 import { VerificationModal } from '@/components/verification/VerificationModal';
+import { VerifyContractResult } from '@/lib/verification';
+import { supabase } from '@/lib/supabase';
 
 interface ABIContractSelectorProps {
   contractAddress: string;
@@ -51,12 +52,83 @@ export function ABIContractSelector({
 }: ABIContractSelectorProps) {
   const { toast } = useToast();
   const [showVerificationModal, setShowVerificationModal] = useState(false);
-  const [verificationRefreshKey, setVerificationRefreshKey] = useState(0);
-  const selectedDeployment = deployments.find(d => d.contract_address === contractAddress);
+  const [verifiedDeploymentIds, setVerifiedDeploymentIds] = useState<Record<string, { verified: boolean; verified_at?: string; onchain_hash?: string }>>({});
 
-  // Callback when verification modal closes - refresh verification status
-  const handleVerificationComplete = () => {
-    setVerificationRefreshKey(prev => prev + 1);
+  // Merge verification status with deployments
+  const deploymentsWithVerification = deployments.map(d => {
+    const verificationUpdate = verifiedDeploymentIds[d.id];
+    if (verificationUpdate) {
+      return {
+        ...d,
+        metadata: {
+          ...d.metadata,
+          ...verificationUpdate,
+        },
+      };
+    }
+    return d;
+  });
+
+  const selectedDeployment = deploymentsWithVerification.find(d => d.contract_address === contractAddress);
+
+  // Save verification result to Supabase deployment metadata
+  const handleVerificationComplete = async (result: VerifyContractResult) => {
+    if (!selectedDeployment) return;
+
+    const verificationData = {
+      verified: result.verified,
+      verified_at: result.verified_at,
+      onchain_hash: result.onchain_hash,
+    };
+
+    // Update local state immediately for instant UI feedback
+    setVerifiedDeploymentIds(prev => ({
+      ...prev,
+      [selectedDeployment.id]: verificationData,
+    }));
+
+    try {
+      // Update deployment metadata in Supabase
+      const updatedMetadata = {
+        ...selectedDeployment.metadata,
+        ...verificationData,
+      };
+
+      console.log('Updating deployment metadata:', {
+        deploymentId: selectedDeployment.id,
+        updatedMetadata,
+      });
+
+      const { data, error: updateError } = await supabase
+        .from('deployments')
+        .update({ metadata: updatedMetadata })
+        .eq('id', selectedDeployment.id)
+        .select();
+
+      console.log('Supabase update result:', { data, error: updateError });
+
+      if (updateError) {
+        console.error('Failed to save verification status:', updateError);
+        toast({
+          title: 'Warning',
+          description: 'Verification succeeded but failed to save status: ' + updateError.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      toast({
+        title: 'Verified',
+        description: 'Contract verification status saved',
+      });
+    } catch (err) {
+      console.error('Error saving verification:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to save verification: ' + (err instanceof Error ? err.message : 'Unknown error'),
+        variant: 'destructive',
+      });
+    }
   };
 
   // Determine network from deployment
@@ -200,7 +272,6 @@ export function ABIContractSelector({
             <div className="pt-3 mt-3 border-t">
               <DeploymentInfoBar
                 deployment={selectedDeployment}
-                refreshKey={verificationRefreshKey}
                 onVerifyClick={
                   !isSharedView && userId && projectId
                     ? () => setShowVerificationModal(true)
@@ -216,10 +287,23 @@ export function ABIContractSelector({
       {userId && projectId && selectedDeployment && (
         <VerificationModal
           open={showVerificationModal}
-          onOpenChange={setShowVerificationModal}
+          onOpenChange={(open) => {
+            if (open) {
+              console.log('Opening VerificationModal with:', {
+                wasmHash: selectedDeployment.metadata?.wasm_hash,
+                isVerified: selectedDeployment.metadata?.verified === true,
+                verifiedAt: selectedDeployment.metadata?.verified_at,
+                fullMetadata: selectedDeployment.metadata,
+              });
+            }
+            setShowVerificationModal(open);
+          }}
           userId={userId}
           projectId={projectId}
           contractId={selectedDeployment.contract_address}
+          wasmHash={selectedDeployment.metadata?.wasm_hash}
+          isVerified={selectedDeployment.metadata?.verified === true}
+          verifiedAt={selectedDeployment.metadata?.verified_at}
           network={network}
           onVerificationComplete={handleVerificationComplete}
         />

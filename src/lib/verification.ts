@@ -50,6 +50,13 @@ export interface PublishResult {
   repo_name: string;
 }
 
+export interface VerifyContractResult {
+  verified: boolean;
+  compiled_hash: string;
+  onchain_hash: string;
+  verified_at?: string;
+}
+
 /**
  * Get project metadata for verification
  */
@@ -131,8 +138,8 @@ export async function publishSource(
 }
 
 /**
- * Check if a contract is verified on SourceScan
- * Uses backend proxy to avoid CORS issues
+ * Check if a contract is verified through NEAR Playground
+ * Uses our backend database to check verification status
  */
 export async function checkVerificationStatus(
   contractId: string,
@@ -152,12 +159,64 @@ export async function checkVerificationStatus(
     return {
       verified: result.data?.verified || false,
       verification_date: result.data?.verification_date,
-      verification_url: `https://${network === 'mainnet' ? '' : 'testnet.'}sourcescan.dev/contracts/${contractId}`,
     };
   } catch {
     // API error, assume not verified
     return { verified: false };
   }
+}
+
+/**
+ * Get the on-chain bytecode hash for a contract
+ * Backend fetches the deployed bytecode and returns its hash
+ */
+export async function getOnchainHash(
+  contractId: string,
+  network: 'testnet' | 'mainnet' = 'testnet'
+): Promise<string> {
+  const response = await fetch(`${BACKEND_URL}/api/verification/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contract_id: contractId,
+      network,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || 'Failed to fetch on-chain bytecode');
+  }
+
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(result.error?.message || result.message || 'Failed to fetch on-chain bytecode');
+  }
+
+  return result.data.onchain_hash;
+}
+
+/**
+ * Verify a contract by comparing stored WASM hash with on-chain bytecode
+ * compiledHash: The wasm_hash stored during deployment
+ */
+export async function verifyContract(
+  contractId: string,
+  compiledHash: string,
+  network: 'testnet' | 'mainnet' = 'testnet'
+): Promise<VerifyContractResult> {
+  // Get on-chain hash from backend
+  const onchainHash = await getOnchainHash(contractId, network);
+
+  // Compare hashes
+  const verified = compiledHash === onchainHash;
+
+  return {
+    verified,
+    compiled_hash: compiledHash,
+    onchain_hash: onchainHash,
+    verified_at: verified ? new Date().toISOString() : undefined,
+  };
 }
 
 /**

@@ -1,0 +1,96 @@
+---
+title: Quickstart
+description: Deploy your first NEAR contract in 5 minutes
+---
+
+# Quickstart
+
+Get your first smart contract running in under 5 minutes.
+
+## 1. Create an Account
+
+Go to [nearplay.app](https://nearplay.app) and sign up with your email.
+
+<img src="/images/signup.png" alt="Sign up screen" />
+
+## 2. Create a Project
+
+Click **New Project** and choose a template:
+
+- **Counter** - Simple state management (recommended for beginners)
+- **NEP-141** - Fungible token standard
+- **NEP-171** - NFT standard
+
+<img src="/images/new-project.png" alt="New project dialog" />
+
+## 3. Write Your Code
+
+The editor opens with your template code. Make changes or keep the default.
+
+```rust
+#[near(contract_state)]
+pub struct Counter {
+    value: i32,
+}
+
+#[near]
+impl Counter {
+    pub fn increment(&mut self) {
+        self.value += 1;
+    }
+
+    pub fn get_value(&self) -> i32 {
+        self.value
+    }
+}
+```
+
+## 4. Compile
+
+Click the **Compile** button. The compiler will:
+- Build your Rust code to WASM
+- Show any errors with line numbers
+- Display the compiled contract size
+
+<img src="/images/compile.png" alt="Compilation output" />
+
+## 5. Deploy
+
+Click **Deploy** to send your contract to the blockchain.
+
+<Tabs>
+  <Tab title="Playground (Testnet)">
+    Free deployment to testnet. No wallet needed.
+
+    Your contract gets a unique address like `user-project-123.nearplay.testnet`
+  </Tab>
+  <Tab title="External Wallet (Mainnet)">
+    Connect HOT or Meteor wallet to deploy with real NEAR tokens.
+  </Tab>
+</Tabs>
+
+<img src="/images/deploy.png" alt="Deploy dialog" />
+
+## 6. Interact
+
+After deployment, the **Contract Interface** tab shows your methods.
+
+- **View methods** (free) - Read data without transactions
+- **Call methods** - Execute functions that modify state
+
+<img src="/images/contract-ui.png" alt="Contract interface" />
+
+Try clicking **increment** a few times, then **get_value** to see the result.
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Build Your First Contract" icon="graduation-cap" href="/guides/first-contract">
+    Step-by-step tutorial
+  </Card>
+  <Card title="Explore Templates" icon="cube" href="/features/templates">
+    NEP-141, NEP-171, and more
+  </Card>
+</CardGroup>
