@@ -26,6 +26,7 @@ import {
   createTemplateFromGitHub,
   createTemplateFromProject,
 } from '@/lib/templates-api';
+import { parseGitHubUrl } from '@/lib/github';
 import type { Project, Template, TemplateDifficulty, TemplateSourceType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import {
@@ -117,6 +118,21 @@ export function PublishTemplateDialog({
       setSourceType('project');
     }
   }, [preSelectedProjectId]);
+
+  // Auto-parse GitHub URL to extract branch and path
+  useEffect(() => {
+    if (sourceType === 'github' && githubUrl) {
+      const parsed = parseGitHubUrl(githubUrl);
+      if (parsed) {
+        if (parsed.branch) {
+          setGithubBranch(parsed.branch);
+        }
+        if (parsed.path) {
+          setGithubPath(parsed.path);
+        }
+      }
+    }
+  }, [githubUrl, sourceType]);
 
   const fetchUserProjects = async () => {
     if (!user) return;

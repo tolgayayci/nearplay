@@ -7,8 +7,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import {
   Select,
   SelectContent,
@@ -24,17 +24,16 @@ import {
   ExternalLink,
   Copy,
   AlertCircle,
-  PlayCircle,
   Globe,
   Wallet,
   Server,
-  Eye,
-  Play,
   Coins,
   Shield,
   Zap,
   AlertTriangle,
-  RefreshCw,
+  ChevronRight,
+  HardDrive,
+  Info,
 } from 'lucide-react';
 import { CompilationResult, DeploymentResult } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
@@ -159,15 +158,10 @@ export function DeployDialog({
     setDeploymentError(null);
 
     try {
-      const { data: project } = await supabase
-        .from('projects')
-        .select('code')
-        .eq('id', projectId)
-        .single();
-
-      if (project && project.code !== lastCompilation?.code_snapshot) {
-        throw new Error("Code has changed since last compilation. Please compile again before deploying.");
-      }
+      // Note: We don't compare project.code with code_snapshot anymore because:
+      // - Multi-file editor saves to backend filesystem, not to projects.code column
+      // - The comparison was always failing even after successful compilation
+      // - Deployment uses WASM from the last compilation anyway
 
       // Pass the selected RPC URL for playground deployment
       const rpcUrl = getCurrentRpcUrl('testnet');
@@ -226,7 +220,6 @@ export function DeployDialog({
       return;
     }
 
-    // Check if project is compiled
     if (!lastCompilation?.success) {
       setDeploymentError("Please compile your project before deploying.");
       return;
@@ -277,7 +270,6 @@ export function DeployDialog({
     } catch (error) {
       console.error('Wallet deployment error:', error);
 
-      // Handle specific error types
       if (error instanceof WalletDeploymentNotSupportedError) {
         setDeploymentError(error.message);
         toast({
@@ -288,21 +280,8 @@ export function DeployDialog({
         return;
       }
 
-      const errorMessage = error instanceof Error
-        ? error.message
-        : "Failed to deploy contract";
-
-      // Format better error messages
-      if (errorMessage.includes('Cannot connect to backend')) {
-        setDeploymentError("Cannot connect to the backend server. Please ensure the server is running.");
-      } else if (errorMessage.includes('rejected') || errorMessage.includes('cancelled')) {
-        setDeploymentError("Transaction was cancelled or rejected by wallet.");
-      } else if (errorMessage.includes('insufficient') || errorMessage.includes('balance')) {
-        setDeploymentError("Insufficient balance. Factory deployment requires ~3 NEAR deposit.");
-      } else {
-        setDeploymentError(errorMessage);
-      }
-
+      const errorMessage = error instanceof Error ? error.message : "Failed to deploy contract";
+      setDeploymentError(errorMessage);
       toast({
         title: "Deployment Failed",
         description: errorMessage,
@@ -339,12 +318,14 @@ export function DeployDialog({
   };
 
   const wasmSizeKB = lastCompilation?.details?.wasm_size
-    ? (lastCompilation.details.wasm_size / 1024).toFixed(2)
+    ? (lastCompilation.details.wasm_size / 1024).toFixed(1)
     : null;
 
-  const estimatedCost = wasmSizeKB
-    ? formatYoctoNear(estimateDeploymentCost(lastCompilation!.details.wasm_size!))
-    : null;
+  const estimatedCost = deploymentMode === 'playground'
+    ? 'Free'
+    : wasmSizeKB
+      ? `~${formatYoctoNear(estimateDeploymentCost(lastCompilation!.details.wasm_size!))}`
+      : null;
 
   const getContractId = () => {
     if (!deploymentResult) return '';
@@ -367,27 +348,33 @@ export function DeployDialog({
       : deploymentResult.explorerUrl;
   };
 
+  // ABI Error State
   if (showABIError) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-destructive" />
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
               ABI Not Found
             </DialogTitle>
           </DialogHeader>
 
-          <div className="py-4">
-            <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-              <p className="text-sm mb-2">
-                No valid ABI found for your contract. This usually happens when:
-              </p>
-              <ul className="text-sm text-muted-foreground list-disc pl-4 space-y-1">
-                <li>The contract hasn't been compiled successfully</li>
-                <li>The last compilation failed</li>
-                <li>The contract doesn't expose any public methods</li>
-              </ul>
+          <div className="space-y-4 py-4">
+            <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/20 space-y-3">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive flex-none mt-0.5" />
+                <div className="space-y-2">
+                  <p className="text-sm">
+                    No valid ABI found for your contract. This usually happens when:
+                  </p>
+                  <ul className="text-sm text-muted-foreground list-disc pl-4 space-y-1">
+                    <li>The contract hasn't been compiled successfully</li>
+                    <li>The last compilation failed</li>
+                    <li>The contract doesn't expose any public methods</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -400,8 +387,9 @@ export function DeployDialog({
                 onOpenChange(false);
                 onCompile?.();
               }}
+              className="gap-2"
             >
-              <Terminal className="h-4 w-4 mr-2" />
+              <Terminal className="h-4 w-4" />
               Compile Again
             </Button>
           </DialogFooter>
@@ -411,395 +399,205 @@ export function DeployDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="sm:max-w-[600px] max-h-[85vh] overflow-hidden"
-        onInteractOutside={(e) => {
-          if (!isDeploying) {
-            e.preventDefault();
-            onOpenChange(false);
-          }
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <RocketIcon className="h-5 w-5" />
-            Deploy Contract
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RocketIcon className="h-5 w-5" />
+              Deploy Contract
+            </DialogTitle>
+          </DialogHeader>
 
-        <ScrollArea className="flex-1 max-h-[calc(85vh-160px)]">
-          <div className="space-y-4 py-2">
-            {/* Deployment Mode Selector */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Deployment Method</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleModeSwitch('playground')}
-                  className={cn(
-                    'flex items-center gap-3 p-3 rounded-lg border text-left transition-colors',
-                    deploymentMode === 'playground'
-                      ? 'border-primary bg-muted'
-                      : 'border-border hover:bg-muted/50'
+          <div className="space-y-4">
+            {/* Wallet/Mode Section */}
+            <div className="p-4 rounded-lg border bg-card">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  {deploymentMode === 'playground' ? (
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-md">
+                      <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                  ) : (
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/50 rounded-md">
+                      <Wallet className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    </div>
                   )}
-                >
-                  <Zap className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">Playground</span>
-                      {deploymentMode === 'playground' && (
-                        <CheckCircle className="h-3.5 w-3.5 text-primary" />
+                    <div className="font-medium">
+                      {deploymentMode === 'playground' ? 'Playground Wallet' : 'External Wallet'}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {deploymentMode === 'playground' ? (
+                        'Free testnet deployment • We fund the account for you'
+                      ) : isConnected ? (
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{getWalletDisplayName(walletId)}</span>
+                          <span>•</span>
+                          <span className="font-mono">{accountId?.slice(0, 12)}...{accountId?.slice(-6)}</span>
+                          {accountBalance && (
+                            <>
+                              <span>•</span>
+                              <span>{formatNearAmount(accountBalance.available)} NEAR</span>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        'Not connected'
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground">Free testnet</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => handleModeSwitch('wallet')}
-                  className={cn(
-                    'flex items-center gap-3 p-3 rounded-lg border text-left transition-colors',
-                    deploymentMode === 'wallet'
-                      ? 'border-primary bg-muted'
-                      : 'border-border hover:bg-muted/50'
-                  )}
-                >
-                  <Wallet className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">External Wallet</span>
-                      {deploymentMode === 'wallet' && (
-                        <CheckCircle className="h-3.5 w-3.5 text-primary" />
-                      )}
-                    </div>
-                    <span className="text-xs text-muted-foreground">Your wallet</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Mode-specific Content */}
-            {deploymentMode === 'playground' ? (
-              <div className="p-3 rounded-lg border bg-muted/30">
-                <div className="flex items-start gap-3">
-                  <Zap className="h-4 w-4 text-muted-foreground mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Playground Wallet</p>
-                    <p className="text-xs text-muted-foreground">
-                      Free deployment with 2 NEAR funded. Testnet only.
-                    </p>
                   </div>
                 </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleModeSwitch(deploymentMode === 'playground' ? 'wallet' : 'playground')}
+                  className="gap-1"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                  Switch
+                </Button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {/* Factory Availability Check */}
-                {isCheckingFactory && (
-                  <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Checking deployment availability...</span>
-                  </div>
-                )}
 
-                {/* Factory Not Available Warning */}
-                {!isCheckingFactory && factoryAvailable === false && (
-                  <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-amber-600 dark:text-amber-400">Factory Contract Not Available</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Wallet deployment requires a factory contract that isn't deployed yet on {network}.
-                          For security reasons, NEAR wallets don't allow direct contract deployment.
-                        </p>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="h-auto p-0 mt-2 text-xs"
-                          onClick={() => handleModeSwitch('playground')}
-                        >
-                          Switch to Playground mode (recommended)
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+              <Separator className="my-3" />
 
-                {/* Factory Available Success */}
-                {!isCheckingFactory && factoryAvailable === true && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
-                    <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-green-600 dark:text-green-400">Factory Deployment Available</p>
-                      <p className="text-xs text-muted-foreground">
-                        Your contract will be deployed to a sub-account via our factory. Requires ~3 NEAR deposit.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Mainnet Warning */}
-                {network === 'mainnet' && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg border border-destructive/30 bg-destructive/5">
-                    <AlertTriangle className="h-4 w-4 text-destructive mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">Mainnet Deployment</p>
-                      <p className="text-xs text-muted-foreground">
-                        This will use real NEAR tokens.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Wallet Connection Status */}
-                {isConnected && accountId ? (
-                  <div className="p-3 rounded-lg border bg-muted/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-green-500" />
-                        <span className="text-xs text-muted-foreground">Connected via</span>
-                        <span className="text-xs font-medium">
-                          {getWalletDisplayName(walletId)}
-                        </span>
-                      </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {network === 'mainnet' ? 'Mainnet' : 'Testnet'}
-                      </Badge>
-                    </div>
-                    <p className="font-mono text-sm truncate mb-2">{accountId}</p>
-                    <div className="flex items-center justify-between pt-2 border-t">
-                      <div>
-                        <span className="text-xs text-muted-foreground">Balance</span>
-                        <p className="text-sm font-medium">
-                          {isLoadingBalance ? (
-                            'Loading...'
-                          ) : accountBalance ? (
-                            `${formatNearAmount(accountBalance.available)} NEAR`
-                          ) : (
-                            '--'
-                          )}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={refreshBalance}
-                        disabled={isLoadingBalance}
-                      >
-                        <RefreshCw className={cn("h-3.5 w-3.5", isLoadingBalance && "animate-spin")} />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-lg border border-dashed text-center">
-                    <Wallet className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Connect your wallet to deploy
-                    </p>
-                    <Button size="sm" onClick={connectWallet}>
-                      Connect Wallet
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* RPC Provider Selector */}
-            <div className="p-3 rounded-lg border bg-muted/30">
+              {/* Network & RPC Info */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Server className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">RPC Provider</span>
-                </div>
-                <Select
-                  value={currentProviderId}
-                  onValueChange={(value) => setProvider(currentNetwork, value)}
-                >
-                  <SelectTrigger className="h-7 w-[160px] text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providers.map((p) => (
-                      <SelectItem key={p.id} value={p.id} className="text-xs">
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <p className="text-xs text-muted-foreground font-mono mt-1.5 truncate">
-                {getCurrentRpcUrl(currentNetwork)}
-              </p>
-            </div>
-
-            {/* Contract Info */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg border bg-muted/30">
-                <div className="flex items-center gap-2 mb-1">
                   <Globe className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Network</span>
+                  <span className="text-sm font-medium">NEAR {currentNetwork === 'mainnet' ? 'Mainnet' : 'Testnet'}</span>
+                  <Badge variant="secondary" className="text-xs">
+                    {currentNetwork}
+                  </Badge>
                 </div>
-                <p className="text-sm font-medium">
-                  NEAR {currentNetwork === 'mainnet' ? 'Mainnet' : 'Testnet'}
-                </p>
+
+                <div className="flex items-center gap-2">
+                  <Server className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Select
+                    value={currentProviderId}
+                    onValueChange={(value) => setProvider(currentNetwork, value)}
+                  >
+                    <SelectTrigger className="h-7 w-[130px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {providers.map((p) => (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              {wasmSizeKB && (
-                <div className="p-3 rounded-lg border bg-muted/30">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Server className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Size</span>
+
+              {/* Factory not available warning for wallet mode */}
+              {deploymentMode === 'wallet' && !isCheckingFactory && factoryAvailable === false && (
+                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5" />
+                    <div className="flex-1 text-sm">
+                      <p className="text-amber-800 dark:text-amber-200 font-medium">
+                        Factory not available on {network}
+                      </p>
+                      <p className="text-amber-700 dark:text-amber-300 text-xs mt-1">
+                        Use Playground mode for free testnet deployment
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-sm font-medium">{wasmSizeKB} KB</p>
-                  {estimatedCost && deploymentMode === 'wallet' && (
-                    <p className="text-xs text-muted-foreground">~{estimatedCost} NEAR</p>
-                  )}
+                </div>
+              )}
+
+              {/* Factory available info for wallet mode */}
+              {deploymentMode === 'wallet' && !isCheckingFactory && factoryAvailable === true && (
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 text-sm space-y-2">
+                      <p className="text-blue-800 dark:text-blue-200">
+                        This deployment uses{' '}
+                        <a
+                          href={getExplorerAccountUrl(network === 'mainnet' ? 'factory.nearplay.near' : 'factory.nearplay.testnet', network)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium underline hover:no-underline"
+                        >
+                          {network === 'mainnet' ? 'factory.nearplay.near' : 'factory.nearplay.testnet'}
+                        </a>
+                        {' '}to create your contract account.
+                      </p>
+                      <p className="text-blue-700 dark:text-blue-300 text-xs">
+                        The factory allows deploying contracts from your browser wallet without exposing private keys.
+                        Your contract will be created as a sub-account of the factory.
+                      </p>
+                      {network === 'mainnet' && (
+                        <div className="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 rounded border border-amber-300 dark:border-amber-800">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-amber-800 dark:text-amber-200 text-xs">
+                              <strong>Caution:</strong> Never deploy financially critical applications via Playground.
+                              For production contracts handling real funds, use{' '}
+                              <a
+                                href="https://github.com/near/cargo-near"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline hover:no-underline"
+                              >
+                                cargo-near CLI
+                              </a>
+                              {' '}with proper key management.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* ABI Preview */}
-            {(() => {
-              let functions: any[] = [];
-              if (Array.isArray(lastCompilation?.abi)) {
-                functions = lastCompilation.abi;
-              } else if (lastCompilation?.abi?.body?.functions) {
-                functions = lastCompilation.abi.body.functions;
-              } else if (lastCompilation?.abi) {
-                functions = Object.values(lastCompilation.abi).flat();
-              }
-
-              if (functions.length > 0) {
-                return (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      Contract Methods ({functions.length})
-                    </label>
-                    <div className="space-y-1.5">
-                      {functions.slice(0, 4).map((func: any, index: number) => {
-                        const isView = func.stateMutability === 'view' || func.kind === 'view';
-                        const isPayable = func.stateMutability === 'payable' || func.payable;
-
-                        return (
-                          <div key={index} className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
-                            {isView ? (
-                              <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                            ) : isPayable ? (
-                              <Coins className="h-3.5 w-3.5 text-muted-foreground" />
-                            ) : (
-                              <Play className="h-3.5 w-3.5 text-muted-foreground" />
-                            )}
-                            <span className="font-mono text-xs flex-1">{func.name}</span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {isView ? 'view' : isPayable ? 'payable' : 'call'}
-                            </Badge>
-                          </div>
-                        );
-                      })}
-                      {functions.length > 4 && (
-                        <p className="text-xs text-center text-muted-foreground">
-                          +{functions.length - 4} more
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-
-            {/* Deployment Status */}
-            {isDeploying && (
-              <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <div>
-                  <p className="text-sm font-medium">
-                    Deploying to NEAR {currentNetwork}...
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {deploymentMode === 'wallet'
-                      ? 'Please confirm in your wallet'
-                      : 'This may take a few seconds'}
-                  </p>
+            {/* Contract Metrics Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-lg border bg-card">
+                <div className="flex items-center gap-2 mb-1">
+                  <HardDrive className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs text-muted-foreground">Contract Size</span>
+                </div>
+                <div className="font-semibold">
+                  {wasmSizeKB ? (
+                    <>{wasmSizeKB} KB</>
+                  ) : (
+                    <span className="text-muted-foreground">N/A</span>
+                  )}
                 </div>
               </div>
-            )}
 
-            {/* Deployment Success */}
-            {deploymentResult?.success && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <div>
-                    <p className="text-sm font-medium">Deployment Successful</p>
-                    <p className="text-xs text-muted-foreground">
-                      Contract deployed to NEAR {currentNetwork}
-                    </p>
-                  </div>
+              <div className="p-3 rounded-lg border bg-card">
+                <div className="flex items-center gap-2 mb-1">
+                  <Coins className="h-4 w-4 text-yellow-500" />
+                  <span className="text-xs text-muted-foreground">{deploymentMode === 'playground' ? 'Cost' : 'Est. Gas'}</span>
                 </div>
+                <div className="font-semibold">
+                  {estimatedCost ? (
+                    <>{estimatedCost}{deploymentMode !== 'playground' && ' NEAR'}</>
+                  ) : (
+                    <span className="text-muted-foreground">N/A</span>
+                  )}
+                </div>
+              </div>
+            </div>
 
-                <div className="space-y-2 p-3 border rounded-lg">
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Contract Address</label>
-                    <div className="flex items-center gap-1">
-                      <code className="flex-1 font-mono text-xs bg-muted px-2 py-1.5 rounded border truncate">
-                        {getContractId()}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleCopy(getContractId(), 'address')}
-                      >
-                        {copiedField === 'address' ? (
-                          <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => {
-                          const url = deploymentMode === 'wallet'
-                            ? getWalletExplorerAccountUrl(getContractId(), network)
-                            : getExplorerAccountUrl(getContractId());
-                          window.open(url, '_blank');
-                        }}
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+            {/* Warning Banner */}
+            {!deploymentResult && !deploymentError && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900">
+                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+                <div className="text-sm space-y-1">
+                  <div className="text-yellow-800 dark:text-yellow-200 font-medium">
+                    This will deploy your last compiled contract
                   </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Transaction Hash</label>
-                    <div className="flex items-center gap-1">
-                      <code className="flex-1 font-mono text-xs bg-muted px-2 py-1.5 rounded border truncate">
-                        {getTransactionHash()}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleCopy(getTransactionHash(), 'tx')}
-                      >
-                        {copiedField === 'tx' ? (
-                          <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => window.open(getExplorerUrl(), '_blank')}
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                  <div className="text-yellow-700 dark:text-yellow-300 text-xs">
+                    Make sure to compile again if you've made changes
                   </div>
                 </div>
               </div>
@@ -807,73 +605,160 @@ export function DeployDialog({
 
             {/* Deployment Error */}
             {deploymentError && (
-              <div className="flex items-start gap-2 p-3 rounded-lg border border-destructive/30 bg-destructive/5">
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
                 <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Deployment Failed</p>
-                  <p className="text-xs text-muted-foreground mt-1">{deploymentError}</p>
+                <div className="text-sm">
+                  <div className="font-medium text-destructive">Deployment Failed</div>
+                  <div className="text-muted-foreground mt-1">{deploymentError}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Deployment Success */}
+            {deploymentResult?.success && (
+              <div className="p-4 rounded-lg border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span className="font-medium text-green-700 dark:text-green-400">Deployment Successful</span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Contract:</span>
+                    <div className="flex items-center gap-1">
+                      <code className="text-xs font-mono bg-muted px-2 py-0.5 rounded">
+                        {getContractId().slice(0, 20)}...
+                      </code>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => handleCopy(getContractId(), 'address')}
+                      >
+                        {copiedField === 'address' ? (
+                          <CheckCircle className="h-3 w-3 text-green-500" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => {
+                          const url = deploymentMode === 'wallet'
+                            ? getWalletExplorerAccountUrl(getContractId(), network)
+                            : getExplorerAccountUrl(getContractId());
+                          window.open(url, '_blank');
+                        }}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {getTransactionHash() && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Transaction:</span>
+                      <div className="flex items-center gap-1">
+                        <code className="text-xs font-mono bg-muted px-2 py-0.5 rounded">
+                          {getTransactionHash().slice(0, 12)}...
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleCopy(getTransactionHash(), 'tx')}
+                        >
+                          {copiedField === 'tx' ? (
+                            <CheckCircle className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => window.open(getExplorerUrl(), '_blank')}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
           </div>
-        </ScrollArea>
 
-        <DialogFooter>
-          {deploymentResult?.success ? (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => setShowVerificationModal(true)}
-              >
-                <Shield className="h-4 w-4 mr-2" />
-                Verify Source
-              </Button>
-              <Button onClick={() => onOpenChange(false)}>
-                <PlayCircle className="h-4 w-4 mr-2" />
-                View Contract
-              </Button>
-            </>
-          ) : deploymentError ? (
-            <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleDeploy}>
-                <RocketIcon className="h-4 w-4 mr-2" />
-                Try Again
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleDeploy}
-                disabled={
-                  isDeploying ||
-                  showABIError ||
-                  (deploymentMode === 'wallet' && !isConnected) ||
-                  (deploymentMode === 'wallet' && factoryAvailable === false) ||
-                  (deploymentMode === 'wallet' && isCheckingFactory)
-                }
-              >
-                {isDeploying ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    {deploymentMode === 'wallet' ? 'Confirm in Wallet...' : 'Deploying...'}
-                  </>
-                ) : (
-                  <>
-                    <RocketIcon className="h-4 w-4 mr-2" />
-                    Deploy
-                  </>
-                )}
-              </Button>
-            </>
-          )}
-        </DialogFooter>
-      </DialogContent>
+          <DialogFooter>
+            {deploymentResult?.success ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowVerificationModal(true)}
+                  className="gap-2"
+                >
+                  <Shield className="h-4 w-4" />
+                  Verify Source
+                </Button>
+                <Button onClick={() => onOpenChange(false)} className="gap-2">
+                  <CheckCircle className="h-4 w-4" />
+                  Done
+                </Button>
+              </>
+            ) : deploymentError ? (
+              <>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleDeploy} className="gap-2">
+                  <RocketIcon className="h-4 w-4" />
+                  Try Again
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isDeploying}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleDeploy}
+                  disabled={
+                    isDeploying ||
+                    (deploymentMode === 'wallet' && !isConnected) ||
+                    (deploymentMode === 'wallet' && factoryAvailable === false) ||
+                    (deploymentMode === 'wallet' && isCheckingFactory)
+                  }
+                  className="gap-2"
+                >
+                  {isDeploying ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deploying...
+                    </>
+                  ) : deploymentMode === 'wallet' && !isConnected ? (
+                    <>
+                      <Wallet className="h-4 w-4" />
+                      Connect Wallet
+                    </>
+                  ) : (
+                    <>
+                      <RocketIcon className="h-4 w-4" />
+                      Deploy Contract
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Verification Modal */}
       {user && deploymentResult?.success && (
@@ -887,6 +772,6 @@ export function DeployDialog({
           network={deploymentMode === 'wallet' ? network : 'testnet'}
         />
       )}
-    </Dialog>
+    </>
   );
 }

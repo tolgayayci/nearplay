@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { API_URL } from './config';
+import { parseGitHubUrl } from './github';
 import type {
   Template,
   TemplateFilters,
@@ -156,15 +157,21 @@ export async function createTemplateFromGitHub(input: CreateTemplateInput): Prom
   // Generate a temporary ID for storage
   const templateId = crypto.randomUUID();
 
+  // Parse GitHub URL to get base repo URL (without /tree/branch/path)
+  const parsed = parseGitHubUrl(input.github_url || '');
+  if (!parsed) {
+    throw new Error('Invalid GitHub URL');
+  }
+
   // Clone from GitHub to backend storage
   const response = await fetch(`${API_URL}/api/templates/create/github`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       template_id: templateId,
-      github_url: input.github_url,
-      branch: input.github_branch,
-      path: input.github_path,
+      github_url: parsed.url,  // Use parsed base URL, not the full URL with /tree/...
+      branch: input.github_branch || parsed.branch,  // Prefer explicit, fallback to parsed
+      path: input.github_path || parsed.path,  // Prefer explicit, fallback to parsed
     }),
   });
 
@@ -196,10 +203,7 @@ export async function createTemplateFromGitHub(input: CreateTemplateInput): Prom
     throw new Error(result.message || result.error || 'Failed to clone from GitHub');
   }
 
-  // Parse GitHub URL for storage
-  const parsed = parseGitHubUrl(input.github_url || '');
-
-  // Create template record in Supabase
+  // Create template record in Supabase (parsed is already available from earlier)
   const { data, error } = await supabase
     .from('templates')
     .insert({
@@ -209,11 +213,11 @@ export async function createTemplateFromGitHub(input: CreateTemplateInput): Prom
       description: input.description,
       source_type: 'github',
       storage_path: result.data.storage_path,
-      github_url: input.github_url,
-      github_owner: parsed?.owner,
-      github_repo: parsed?.repo,
-      github_branch: input.github_branch || 'main',
-      github_path: input.github_path,
+      github_url: parsed.url,  // Store the base repo URL
+      github_owner: parsed.owner,
+      github_repo: parsed.repo,
+      github_branch: input.github_branch || parsed.branch || 'main',
+      github_path: input.github_path || parsed.path,
       category: input.category || 'Basic',
       difficulty: input.difficulty || 'Beginner',
       tags: input.tags || [],
@@ -230,7 +234,12 @@ export async function createTemplateFromGitHub(input: CreateTemplateInput): Prom
     throw error;
   }
 
-  return formatTemplateResponse(data);
+  const template = formatTemplateResponse(data);
+
+  // Fetch and attach author info
+  template.author = await fetchAuthor(user.id);
+
+  return template;
 }
 
 /**
@@ -319,7 +328,12 @@ export async function createTemplateFromProject(
     throw error;
   }
 
-  return formatTemplateResponse(data);
+  const template = formatTemplateResponse(data);
+
+  // Fetch and attach author info
+  template.author = await fetchAuthor(user.id);
+
+  return template;
 }
 
 /**
@@ -604,51 +618,6 @@ async function fetchAuthors(userIds: string[]): Promise<Map<string, Template['au
 // ============================================
 // Helper Functions
 // ============================================
-
-/**
- * Parse a GitHub URL
- */
-export function parseGitHubUrl(url: string): {
-  owner: string;
-  repo: string;
-  branch?: string;
-  path?: string;
-} | null {
-  try {
-    const urlObj = new URL(url);
-
-    if (!urlObj.hostname.includes('github.com')) {
-      return null;
-    }
-
-    const pathParts = urlObj.pathname.split('/').filter(Boolean);
-
-    if (pathParts.length < 2) {
-      return null;
-    }
-
-    const owner = pathParts[0];
-    const repo = pathParts[1].replace('.git', '');
-
-    let branch: string | undefined;
-    let path: string | undefined;
-
-    const blobIndex = pathParts.indexOf('blob');
-    const treeIndex = pathParts.indexOf('tree');
-    const refIndex = blobIndex !== -1 ? blobIndex : treeIndex;
-
-    if (refIndex !== -1 && pathParts.length > refIndex + 1) {
-      branch = pathParts[refIndex + 1];
-      if (pathParts.length > refIndex + 2) {
-        path = pathParts.slice(refIndex + 2).join('/');
-      }
-    }
-
-    return { owner, repo, branch, path };
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Format template response

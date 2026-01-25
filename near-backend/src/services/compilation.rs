@@ -41,9 +41,12 @@ pub fn update_cargo_toml_repository(project_path: &PathBuf, repo_url: &str) -> R
 
 /// Recompile project (used after updating Cargo.toml metadata)
 pub async fn recompile_project(project_path: &PathBuf) -> Result<()> {
+    // Use Rust 1.86.0 for contract compilation - newer versions (1.87+) produce WASM
+    // incompatible with NEAR VM, causing PrepareError(Deserialization) on method calls
     info!("Recompiling project at: {:?}", project_path);
 
     let output = Command::new("cargo")
+        .arg("+1.86.0")
         .arg("near")
         .arg("build")
         .arg("non-reproducible-wasm")
@@ -181,9 +184,12 @@ fn copy_dir_all(src: &PathBuf, dst: &PathBuf) -> Result<()> {
 }
 
 fn run_cargo_near_build(project_path: &PathBuf) -> Result<std::process::Output> {
-    debug!("Running cargo near build non-reproducible-wasm in directory: {:?}", project_path);
-    
+    // Use Rust 1.86.0 for contract compilation - newer versions (1.87+) produce WASM
+    // incompatible with NEAR VM, causing PrepareError(Deserialization) on method calls
+    debug!("Running cargo +1.86.0 near build non-reproducible-wasm in directory: {:?}", project_path);
+
     let output = Command::new("cargo")
+        .arg("+1.86.0")
         .arg("near")
         .arg("build")
         .arg("non-reproducible-wasm")

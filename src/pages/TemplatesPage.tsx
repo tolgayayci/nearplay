@@ -1,6 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { TemplateGallery } from '@/components/templates/TemplateGallery';
 import { PublishTemplateDialog } from '@/components/templates/PublishTemplateDialog';
 import { UseTemplateDialog } from '@/components/templates/UseTemplateDialog';
@@ -16,6 +26,7 @@ import {
   getTemplateCategories,
   getTemplateTags,
   incrementTemplateViews,
+  deleteTemplate,
 } from '@/lib/templates-api';
 import {
   toggleLikeTemplate,
@@ -35,6 +46,9 @@ export function TemplatesPage() {
   const [showFaucetDialog, setShowFaucetDialog] = useState(false);
   const [showUseDialog, setShowUseDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
 
   const navigate = useNavigate();
@@ -179,6 +193,44 @@ export function TemplatesPage() {
     setShowPublishDialog(true);
   };
 
+  const handleDeleteTemplate = (template: Template) => {
+    if (!user || template.user_id !== user.id) {
+      toast({
+        title: 'Unauthorized',
+        description: 'You can only delete your own templates',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setTemplateToDelete(template);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await deleteTemplate(templateToDelete.id);
+      setTemplates((prev) => prev.filter((t) => t.id !== templateToDelete.id));
+      toast({
+        title: 'Template removed',
+        description: 'Your template has been removed successfully',
+      });
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to remove template',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+      setTemplateToDelete(null);
+    }
+  };
+
   return (
     <>
       <SEO
@@ -256,9 +308,11 @@ export function TemplatesPage() {
             tags={tags}
             isLoading={isLoading}
             likedTemplateIds={likedTemplateIds}
+            currentUserId={user?.id}
             onTemplateClick={handleTemplateClick}
             onUseTemplate={handleUseTemplate}
             onLikeTemplate={handleLikeTemplate}
+            onDeleteTemplate={handleDeleteTemplate}
             likingTemplateId={likingTemplateId}
             onPublishTemplate={user ? handlePublishTemplate : undefined}
           />
@@ -306,6 +360,29 @@ export function TemplatesPage() {
         onOpenChange={setShowFaucetDialog}
         userId={user?.id || ''}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove "{templateToDelete?.name}" from the marketplace.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteTemplate}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Removing...' : 'Remove'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

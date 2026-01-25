@@ -51,6 +51,8 @@ interface CompileResponse {
     status: string;
     compilation_time: number;
     project_path: string;
+    wasm_size?: number;
+    optimized?: boolean;
   };
   abi: any | null;
 }
@@ -85,6 +87,8 @@ export async function compileContract(
         status: response.data.details.status,
         compilation_time: response.data.details.compilation_time,
         project_path: response.data.details.project_path,
+        wasm_size: response.data.details.wasm_size,
+        optimized: response.data.details.optimized,
       },
       abi: response.data.abi || [],
       code_snapshot: code,

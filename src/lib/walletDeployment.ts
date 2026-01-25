@@ -260,18 +260,43 @@ export function getExplorerTxUrl(txHash: string, network: Network): string {
 }
 
 /**
- * Estimate deployment cost
+ * Estimate deployment gas cost using NEAR's official formula
  * Returns cost in yoctoNEAR
+ *
+ * NEAR Deployment Gas Formula (from docs.near.org/protocol/gas):
+ * - Base: 0.58 Tgas (deploy_contract_cost)
+ * - Per byte: deploy_contract_cost_per_byte
+ * - Formula: 0.58 Tgas + (0.13 Tgas × contract size in KB)
+ *
+ * At minimum gas price (100 Ggas = 0.0001 NEAR per Tgas):
+ * - 16KB contract = 2.65 Tgas ≈ 0.000265 NEAR
+ * - 200KB contract = 26.58 Tgas ≈ 0.00266 NEAR
+ *
+ * We add receipt costs and a buffer for safety.
  */
 export function estimateDeploymentCost(wasmSizeBytes: number): string {
-  // Storage cost: ~1 NEAR per 100KB
-  // Base transaction cost: ~0.0001 NEAR
-  // Contract deployment action: ~0.001 NEAR
-  const storageCost = BigInt(wasmSizeBytes) * BigInt('10000000000000000000'); // 0.00001 NEAR per byte
-  const baseCost = BigInt('100000000000000000000000'); // 0.0001 NEAR
-  const deployActionCost = BigInt('1000000000000000000000000'); // 0.001 NEAR
+  const wasmSizeKB = wasmSizeBytes / 1024;
 
-  return (storageCost + baseCost + deployActionCost).toString();
+  // NEAR's deployment gas formula: 0.58 Tgas + (0.13 Tgas × KB)
+  const baseTgas = 0.58;
+  const perKbTgas = 0.13;
+  const deploymentTgas = baseTgas + (perKbTgas * wasmSizeKB);
+
+  // Add receipt creation cost (~0.25 Tgas) and execution buffer
+  const receiptTgas = 0.25;
+  const totalTgas = deploymentTgas + receiptTgas;
+
+  // Convert Tgas to NEAR at minimum gas price (1 Tgas = 0.0001 NEAR)
+  // 1 Tgas = 10^12 gas units
+  // Min gas price = 10^8 yoctoNEAR per gas unit
+  // 1 Tgas cost = 10^12 × 10^8 = 10^20 yoctoNEAR = 0.0001 NEAR
+  const tgasToYoctoNear = BigInt('100000000000000000000'); // 0.0001 NEAR in yoctoNEAR
+
+  // Round up Tgas and multiply
+  const totalTgasRounded = Math.ceil(totalTgas * 100) / 100; // Round to 2 decimals
+  const costYoctoNear = BigInt(Math.ceil(totalTgasRounded * 100)) * (tgasToYoctoNear / BigInt(100));
+
+  return costYoctoNear.toString();
 }
 
 /**

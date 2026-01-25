@@ -174,8 +174,10 @@ export function EditorPage() {
             exit_code: lastCompilation.exit_code,
             stdout: lastCompilation.stdout || "",
             stderr: lastCompilation.stderr || "",
-            details: lastCompilation.details || {
-              compilation_time: Date.now() / 1000,
+            details: lastCompilation.result?.details || lastCompilation.details || {
+              status: 'unknown',
+              compilation_time: 0,
+              project_path: '',
             },
             abi: lastCompilation.abi,
             code_snapshot: lastCompilation.code_snapshot,

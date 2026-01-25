@@ -54,10 +54,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Rust for cargo-near (we need cargo in runtime for compilation)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && \
+# IMPORTANT: Use Rust 1.86.0 - newer versions (1.87+) produce WASM incompatible with NEAR VM
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.86.0 && \
     . /root/.cargo/env && \
     rustup target add wasm32-unknown-unknown && \
-    rustup default stable
+    rustup default 1.86.0
 
 # Set PATH for cargo
 ENV PATH="/root/.cargo/bin:${PATH}"

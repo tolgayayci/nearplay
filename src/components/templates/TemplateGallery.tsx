@@ -9,6 +9,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { Template, TemplateDifficulty } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import {
@@ -21,6 +27,8 @@ import {
   Eye,
   Download,
   Heart,
+  MoreVertical,
+  Trash2,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -30,9 +38,11 @@ interface TemplateGalleryProps {
   tags: string[];
   isLoading?: boolean;
   likedTemplateIds?: Set<string>;
+  currentUserId?: string;
   onTemplateClick: (template: Template) => void;
   onUseTemplate: (template: Template) => void;
   onLikeTemplate: (template: Template) => void;
+  onDeleteTemplate?: (template: Template) => void;
   likingTemplateId?: string | null;
   onPublishTemplate?: () => void;
 }
@@ -65,9 +75,11 @@ export function TemplateGallery({
   tags: availableTags,
   isLoading,
   likedTemplateIds = new Set(),
+  currentUserId,
   onTemplateClick,
   onUseTemplate,
   onLikeTemplate,
+  onDeleteTemplate,
   likingTemplateId,
   onPublishTemplate,
 }: TemplateGalleryProps) {
@@ -457,18 +469,46 @@ export function TemplateGallery({
 
                     {/* Actions Column */}
                     <td className="py-4 px-4">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onUseTemplate(template);
-                        }}
-                        className="gap-1.5"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Use
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUseTemplate(template);
+                          }}
+                          className="gap-1.5"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Use
+                        </Button>
+                        {currentUserId && template.user_id === currentUserId && onDeleteTemplate && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-8 w-8 p-0"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteTemplate(template);
+                                }}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remove
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

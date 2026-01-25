@@ -22,8 +22,11 @@ pub async fn deploy_contract(
     _account_id: Option<&str>,
     rpc_url: Option<&str>,
 ) -> Result<DeployResponse> {
-    // Use provided RPC URL or fall back to default
-    let rpc_url = rpc_url.unwrap_or(DEFAULT_TESTNET_RPC_URL);
+    // Use provided RPC URL, or env variable, or fall back to default
+    let rpc_url: String = match rpc_url {
+        Some(url) => url.to_string(),
+        None => env::var("NEAR_RPC_URL").unwrap_or_else(|_| DEFAULT_TESTNET_RPC_URL.to_string()),
+    };
     info!(
         "Starting NEAR deployment for project {} by user {}",
         project_id, user_id

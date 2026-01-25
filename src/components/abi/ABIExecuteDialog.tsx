@@ -82,8 +82,10 @@ export function ABIExecuteDialog({
     setResult({ status: 'pending' });
 
     try {
-      // Get current RPC URL from context
-      const rpcUrl = getCurrentRpcUrl(network);
+      // Determine network from contract address (more reliable than wallet setting)
+      // .near = mainnet, .testnet = testnet
+      const contractNetwork = contractAddress.endsWith('.near') ? 'mainnet' : 'testnet';
+      const rpcUrl = getCurrentRpcUrl(contractNetwork);
 
       // Execute NEAR method through backend with RPC URL
       const response = await executeNearMethod(contractAddress, method, inputs, rpcUrl);
