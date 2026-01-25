@@ -1,4 +1,4 @@
-import { ArrowRight, Github, Mail, FileText, FolderOpen, Code, Rocket, Wallet, MousePointer, Terminal, Zap, Globe, FolderTree, Layers, Server, Package } from 'lucide-react';
+import { ArrowRight, Github, Mail, FileText, FolderOpen, Code, Rocket, Wallet, MousePointer, Terminal, Zap, Globe, FolderTree, Layers, Server, Package, GitBranch } from 'lucide-react';
 
 export function HowItWorks() {
   return (
@@ -351,32 +351,10 @@ export function HowItWorks() {
               <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-4">
                 <Globe className="h-6 w-6 text-teal-600" />
               </div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">Deploy to NEAR</h4>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Multi-Network Deploy</h4>
               <p className="text-gray-600 leading-relaxed">
-                Testnet deployment with<br />
-                automatic account creation
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <FolderTree className="h-6 w-6 text-teal-600" />
-              </div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">Project Management</h4>
-              <p className="text-gray-600 leading-relaxed">
-                Create, manage, and share<br />
-                multiple NEAR projects
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <Terminal className="h-6 w-6 text-teal-600" />
-              </div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">cargo-near Integration</h4>
-              <p className="text-gray-600 leading-relaxed">
-                Build and optimize<br />
-                contracts with cargo-near
+                Deploy to testnet or mainnet<br />
+                with wallet integration
               </p>
             </div>
 
@@ -384,21 +362,32 @@ export function HowItWorks() {
               <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-4">
                 <Layers className="h-6 w-6 text-teal-600" />
               </div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">Smart Contract UI</h4>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Template Marketplace</h4>
               <p className="text-gray-600 leading-relaxed">
-                Auto-generated interface to<br />
-                interact with deployed contracts
+                Community-driven templates<br />
+                publish and share your own
               </p>
             </div>
 
             <div className="text-center">
               <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <Server className="h-6 w-6 text-teal-600" />
+                <GitBranch className="h-6 w-6 text-teal-600" />
               </div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">Cloud Infrastructure</h4>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">GitHub Import</h4>
               <p className="text-gray-600 leading-relaxed">
-                Your code lives in the cloud,<br />
-                accessible from anywhere
+                Import contracts directly<br />
+                from any GitHub repository
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Terminal className="h-6 w-6 text-teal-600" />
+              </div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Contract Testing</h4>
+              <p className="text-gray-600 leading-relaxed">
+                Built-in test runner with<br />
+                NEAR sandbox environment
               </p>
             </div>
 
@@ -406,10 +395,21 @@ export function HowItWorks() {
               <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-4">
                 <Package className="h-6 w-6 text-teal-600" />
               </div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">Template Library</h4>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Dependency Manager</h4>
               <p className="text-gray-600 leading-relaxed">
-                NEP-141 Token, NEP-171 NFT,<br />
-                Counter, Voting - ready to use
+                Browse and add crates<br />
+                from the registry
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Code className="h-6 w-6 text-teal-600" />
+              </div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Embeddable Widgets</h4>
+              <p className="text-gray-600 leading-relaxed">
+                Share contract interactions<br />
+                anywhere with embed codes
               </p>
             </div>
           </div>

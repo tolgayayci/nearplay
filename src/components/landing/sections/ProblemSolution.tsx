@@ -221,13 +221,13 @@ export function ProblemSolution() {
                 <Wallet className="h-5 w-5 text-gray-900" />
               </div>
               <div className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">
-                Instead of wallet setup
+                Testnet & Mainnet
               </div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                Deploy to testnet instantly
+                Multi-network deployment
               </h4>
               <p className="text-gray-500 text-sm">
-                No wallet configuration. No private keys. No testnet tokens. We handle it all so you can deploy immediately. Start building today.
+                Deploy to testnet for testing or mainnet for production. Connect your wallet for mainnet, or use our built-in faucet for testnet tokens.
               </p>
             </div>
 
@@ -236,13 +236,13 @@ export function ProblemSolution() {
                 <FileCode className="h-5 w-5 text-gray-900" />
               </div>
               <div className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">
-                Instead of ABI management
+                GitHub Integration
               </div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                Interact with contracts in one click
+                Import from GitHub
               </h4>
               <p className="text-gray-500 text-sm">
-                No ABI copy-pasting. No interface building. Just click and interact with your deployed NEAR contracts instantly.
+                Import existing contracts directly from GitHub repositories. Paste a URL and start building on top of any NEAR project instantly.
               </p>
             </div>
 
@@ -251,13 +251,13 @@ export function ProblemSolution() {
                 <History className="h-5 w-5 text-gray-900" />
               </div>
               <div className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">
-                Instead of version confusion
+                Community Templates
               </div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                See deployed contract history
+                Browse and publish templates
               </h4>
               <p className="text-gray-500 text-sm">
-                Deploy multiple contracts within a project. Test your changes between versions fastly. Track deployment history.
+                Explore community-created templates. Publish your own contracts for others to use. Build on top of battle-tested code.
               </p>
             </div>
           </div>
@@ -270,9 +270,18 @@ export function ProblemSolution() {
               <h3 className="text-2xl font-semibold text-gray-900 mb-2">
                 Stop wasting time. Start shipping.
               </h3>
-              <p className="text-gray-500">
-                Join 100+ developers building on NEAR Protocol
-              </p>
+              <div className="flex items-center gap-3">
+                <div className="flex -space-x-2">
+                  <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=32&h=32&fit=crop&crop=faces" alt="" className="w-8 h-8 rounded-full border-2 border-white" />
+                  <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=32&h=32&fit=crop&crop=faces" alt="" className="w-8 h-8 rounded-full border-2 border-white" />
+                  <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=faces" alt="" className="w-8 h-8 rounded-full border-2 border-white" />
+                  <img src="https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=32&h=32&fit=crop&crop=faces" alt="" className="w-8 h-8 rounded-full border-2 border-white" />
+                  <img src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=32&h=32&fit=crop&crop=faces" alt="" className="w-8 h-8 rounded-full border-2 border-white" />
+                </div>
+                <p className="text-gray-500">
+                  Join <span className="font-semibold text-gray-900">300+</span> developers building on NEAR Playground
+                </p>
+              </div>
             </div>
             <button
               onClick={() => {

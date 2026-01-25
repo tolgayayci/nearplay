@@ -6,10 +6,8 @@ import {
   Network,
   Share2,
   Zap,
-  FileCode,
   Blocks,
   PlayCircle,
-  Braces,
   ArrowRight,
   Plus,
   FileCode2,
@@ -24,7 +22,7 @@ const FEATURES = [
   {
     icon: Rocket,
     title: 'Instant Project Setup',
-    description: 'Start with NEAR smart contract templates including Counter, NFT, FT, and DeFi contracts.',
+    description: 'Start with templates, import from GitHub, or create from scratch. Get building in seconds.',
     color: 'from-emerald-500/20 via-transparent to-transparent',
     preview: (
       <div className="relative overflow-hidden rounded-lg border bg-muted h-[200px]">
@@ -52,12 +50,12 @@ const FEATURES = [
 
             <div className="flex items-center justify-between p-3 rounded-lg bg-background/50 border hover:border-primary/50 transition-colors cursor-pointer group">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-md bg-blue-500/10">
-                  <FileCode2 className="h-4 w-4 text-blue-500" />
+                <div className="p-2 rounded-md bg-purple-500/10">
+                  <GitBranch className="h-4 w-4 text-purple-500" />
                 </div>
                 <div>
-                  <div className="font-medium text-sm">Use Template</div>
-                  <div className="text-xs text-muted-foreground">NEP-141, NEP-171, Counter...</div>
+                  <div className="font-medium text-sm">Import from GitHub</div>
+                  <div className="text-xs text-muted-foreground">Clone existing repo</div>
                 </div>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -69,62 +67,45 @@ const FEATURES = [
   },
   {
     icon: Code2,
-    title: 'Rust Code, NEAR-Ready',
-    description: 'Write Rust code with NEAR SDK macros and attributes. The IDE provides NEAR-specific syntax highlighting.',
+    title: 'Multi-File Editor',
+    description: 'Full file explorer, dependency management, and Monaco editor with Rust syntax highlighting.',
     color: 'from-blue-500/20 via-transparent to-transparent',
     preview: (
       <div className="relative overflow-hidden rounded-lg border bg-muted h-[200px]">
         <div className="flex items-center justify-between px-4 py-2 border-b bg-background/50">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Code2 className="h-4 w-4" />
-            lib.rs
+            Project Explorer
           </div>
         </div>
-        <div className="p-6 font-mono text-sm">
-          <div className="text-blue-500">#[near_bindgen]</div>
-          <div className="text-purple-500">pub struct</div>
-          <div className="pl-4">Counter {'{'}</div>
-          <div className="pl-8 text-muted-foreground">value: i32</div>
-          <div className="pl-4">{'}'}</div>
-        </div>
-      </div>
-    ),
-  },
-  {
-    icon: Terminal,
-    title: 'Zero-Setup Compilation',
-    description: 'Compile and deploy your contracts via cargo-near. No local toolchain setup needed – runs in the cloud.',
-    color: 'from-purple-500/20 via-transparent to-transparent',
-    preview: (
-      <div className="relative overflow-hidden rounded-lg border bg-muted h-[200px]">
-        <div className="flex items-center justify-between px-4 py-2 border-b bg-background/50">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Terminal className="h-4 w-4" />
-            Compilation Output
+        <div className="flex h-[calc(200px-34px)]">
+          {/* File tree */}
+          <div className="w-1/3 border-r p-2 text-xs space-y-1">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <FileCode2 className="h-3 w-3" /> src/
+            </div>
+            <div className="pl-3 text-blue-500">lib.rs</div>
+            <div className="pl-3 text-muted-foreground">state.rs</div>
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <FileCode2 className="h-3 w-3" /> Cargo.toml
+            </div>
           </div>
-        </div>
-        <div className="p-4 font-mono text-xs">
-          <pre className="whitespace-pre-wrap space-y-1">
-            <div className="text-muted-foreground">Building NEAR contract with cargo-near v0.6.0</div>
-            <div>
-              <span className="text-muted-foreground">contract size: </span>
-              <span className="text-green-500 font-semibold">4.2 KB</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">wasm size: </span>
-              <span className="text-green-500 font-semibold">12.1 KB</span>
-            </div>
-            <div className="text-muted-foreground">Deployed to: counter.testnet</div>
-            <div className="text-muted-foreground">...</div>
-          </pre>
+          {/* Code */}
+          <div className="flex-1 p-3 font-mono text-xs">
+            <div className="text-blue-500">#[near_bindgen]</div>
+            <div className="text-purple-500">pub struct</div>
+            <div className="pl-2">Contract {'{'}</div>
+            <div className="pl-4 text-muted-foreground">state: State</div>
+            <div className="pl-2">{'}'}</div>
+          </div>
         </div>
       </div>
     ),
   },
   {
     icon: Network,
-    title: '1-Click NEAR Deployment',
-    description: 'Deploy directly to NEAR testnet. Auto-configured RPC endpoints and account management.',
+    title: 'Multi-Network Deploy',
+    description: 'Deploy to testnet for testing or mainnet for production. Connect your wallet or use built-in accounts.',
     color: 'from-yellow-500/20 via-transparent to-transparent',
     preview: (
       <div className="relative overflow-hidden rounded-lg border bg-muted h-[200px]">
@@ -135,38 +116,28 @@ const FEATURES = [
           </div>
         </div>
         <div className="p-4">
-          {/* Deployment Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-md bg-yellow-500/10">
-                <Network className="h-4 w-4 text-yellow-500" />
-              </div>
-              <div>
-                <div className="font-medium text-sm">Ready to Deploy</div>
-                <div className="text-xs text-muted-foreground">NEAR Testnet</div>
-              </div>
+          {/* Network selector */}
+          <div className="flex gap-2 mb-4">
+            <div className="flex-1 p-2 rounded-lg bg-background/50 border text-center text-xs">
+              <div className="font-medium">Testnet</div>
+              <div className="text-muted-foreground">Testing</div>
             </div>
-            <Button size="sm" className="h-8 gap-1.5">
-              <Rocket className="h-4 w-4" />
-              Deploy
-            </Button>
+            <div className="flex-1 p-2 rounded-lg bg-primary/10 border border-primary text-center text-xs">
+              <div className="font-medium text-primary">Mainnet</div>
+              <div className="text-muted-foreground">Production</div>
+            </div>
           </div>
 
-          {/* Deployment Info */}
+          {/* Deploy options */}
           <div className="space-y-2">
             <div className="flex items-center justify-between p-2 rounded-lg bg-background/50 border">
-              <div className="flex items-center gap-2">
-                <span className="text-sm">Network Ready</span>
-              </div>
-              <code className="text-xs font-mono text-muted-foreground">Network: testnet</code>
+              <span className="text-sm">Wallet Connected</span>
+              <Badge variant="outline" className="text-xs">myaccount.near</Badge>
             </div>
-
-            <div className="flex items-center justify-between p-2 rounded-lg bg-background/50 border">
-              <div className="flex items-center gap-2">
-                <span className="text-sm">Estimated Gas</span>
-              </div>
-              <div className="text-sm">0.1 NEAR</div>
-            </div>
+            <Button size="sm" className="w-full h-8 gap-1.5">
+              <Rocket className="h-4 w-4" />
+              Deploy to Mainnet
+            </Button>
           </div>
         </div>
       </div>
@@ -174,34 +145,68 @@ const FEATURES = [
   },
   {
     icon: PlayCircle,
-    title: 'Interactive Contract Testing',
-    description: 'Execute contract methods, view transaction outputs, and monitor call history. Built-in NEAR account viewer and transaction explorer.',
+    title: 'Built-in Testing',
+    description: 'Run contract tests with NEAR sandbox. View results, debug failures, and ensure your code works.',
     color: 'from-red-500/20 via-transparent to-transparent',
     preview: (
       <div className="relative overflow-hidden rounded-lg border bg-muted h-[200px]">
         <div className="flex items-center justify-between px-4 py-2 border-b bg-background/50">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Braces className="h-4 w-4" />
-            Contract Interface
+            <Terminal className="h-4 w-4" />
+            Test Runner
           </div>
         </div>
-        <div className="grid grid-rows-2 h-[calc(200px-34px)]">
+        <div className="p-4 font-mono text-xs space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-green-500">PASS</span>
+            <span className="text-muted-foreground">test_increment</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-green-500">PASS</span>
+            <span className="text-muted-foreground">test_decrement</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-green-500">PASS</span>
+            <span className="text-muted-foreground">test_reset</span>
+          </div>
+          <div className="pt-2 border-t mt-2">
+            <span className="text-green-500 font-semibold">3 passed</span>
+            <span className="text-muted-foreground"> in 1.2s</span>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    icon: Blocks,
+    title: 'Template Marketplace',
+    description: 'Browse community templates. Publish your own contracts. Build on battle-tested code.',
+    color: 'from-purple-500/20 via-transparent to-transparent',
+    preview: (
+      <div className="relative overflow-hidden rounded-lg border bg-muted h-[200px]">
+        <div className="flex items-center justify-between px-4 py-2 border-b bg-background/50">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Blocks className="h-4 w-4" />
+            Template Marketplace
+          </div>
+        </div>
+        <div className="p-3 space-y-2">
           {[
-            { name: 'increment', params: '()' },
-            { name: 'get_count', params: '()' }
-          ].map((method, i) => (
-            <div 
-              key={i} 
-              className="flex items-center justify-between px-6 border-b last:border-b-0"
-            >
-              <code className="text-sm font-mono">
-                <span>{method.name}</span>
-                <span className="text-muted-foreground">{method.params}</span>
-              </code>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5">
-                <PlayCircle className="h-3.5 w-3.5" />
-                Execute
-              </Button>
+            { name: 'NEP-141 Token', author: 'near-examples', stars: 142 },
+            { name: 'NFT Collection', author: 'community', stars: 89 },
+            { name: 'DAO Voting', author: 'defi-dao', stars: 67 },
+          ].map((template, i) => (
+            <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-background/50 border">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded bg-purple-500/10">
+                  <FileCode2 className="h-3 w-3 text-purple-500" />
+                </div>
+                <div>
+                  <div className="text-xs font-medium">{template.name}</div>
+                  <div className="text-[10px] text-muted-foreground">by {template.author}</div>
+                </div>
+              </div>
+              <Badge variant="outline" className="text-[10px]">{template.stars}</Badge>
             </div>
           ))}
         </div>
@@ -210,49 +215,39 @@ const FEATURES = [
   },
   {
     icon: Share2,
-    title: 'Share & Collaborate',
-    description: 'Share your NEAR projects with read-only links. Invite team members to view and collaborate on your contracts.',
+    title: 'Embeddable Widgets',
+    description: 'Share your contracts anywhere. Generate embed codes for websites, docs, and tutorials.',
     color: 'from-pink-500/20 via-transparent to-transparent',
     preview: (
       <div className="relative overflow-hidden rounded-lg border bg-muted h-[200px]">
         <div className="flex items-center justify-between px-4 py-2 border-b bg-background/50">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Share2 className="h-4 w-4" />
-            Share Project
+            Embed Widget
           </div>
         </div>
-        <div className="p-6 space-y-4">
-          {/* Share Link */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Project Link</span>
-              <Badge variant="outline" className="bg-pink-500/10 text-pink-500">
-                Read-only
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 rounded-md bg-background/50 p-2 text-xs font-mono text-muted-foreground truncate">
-                https://nearplay.app/p/counter-xyz123
-              </div>
-              <Button size="sm" variant="outline" className="h-8">
-                Copy
-              </Button>
+        <div className="p-4 space-y-3">
+          <div className="space-y-2">
+            <span className="text-xs font-medium">Embed Code</span>
+            <div className="rounded-md bg-background/80 p-2 text-[10px] font-mono text-muted-foreground overflow-hidden">
+              {'<iframe src="nearplay.app/embed/counter" />'}
             </div>
           </div>
-
-          {/* Share Info */}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <div className="flex -space-x-2">
-              <Avatar className="h-6 w-6 border-2 border-background">
-                <AvatarImage src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?&w=64&h=64&q=70&crop=faces&fit=crop" />
-                <AvatarFallback>SC</AvatarFallback>
-              </Avatar>
-              <Avatar className="h-6 w-6 border-2 border-background">
-                <AvatarImage src="https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?&w=64&h=64&q=70&crop=faces&fit=crop" />
-                <AvatarFallback>AR</AvatarFallback>
-              </Avatar>
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2">
+              <Badge variant="outline" className="text-[10px]">Button</Badge>
+              <Badge variant="outline" className="text-[10px] bg-primary/10">Widget</Badge>
+              <Badge variant="outline" className="text-[10px]">Full</Badge>
             </div>
-            <span>2 viewers</span>
+            <Button size="sm" variant="outline" className="h-6 text-xs">
+              Copy
+            </Button>
+          </div>
+          <div className="rounded border p-2 bg-background/50 text-center">
+            <Button size="sm" className="h-7 text-xs gap-1">
+              <Zap className="h-3 w-3" />
+              Try Counter
+            </Button>
           </div>
         </div>
       </div>

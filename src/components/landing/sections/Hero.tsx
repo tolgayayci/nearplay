@@ -161,7 +161,7 @@ export function Hero() {
               </div>
               <div className="text-left">
                 <div className="text-2xl font-bold text-gray-900">&lt;30s</div>
-                <div className="text-sm text-gray-600">To Testnet</div>
+                <div className="text-sm text-gray-600">To Deploy</div>
               </div>
             </div>
 
@@ -170,8 +170,8 @@ export function Hero() {
                 <Rocket className="h-6 w-6 text-blue-600" />
               </div>
               <div className="text-left">
-                <div className="text-2xl font-bold text-gray-900">Cloud IDE</div>
-                <div className="text-sm text-gray-600">Zero Setup</div>
+                <div className="text-2xl font-bold text-gray-900">Mainnet</div>
+                <div className="text-sm text-gray-600">Ready to Ship</div>
               </div>
             </div>
 
@@ -180,8 +180,8 @@ export function Hero() {
                 <Sparkles className="h-6 w-6 text-purple-600" />
               </div>
               <div className="text-left">
-                <div className="text-2xl font-bold text-gray-900">Templates</div>
-                <div className="text-sm text-gray-600">NEP Standards</div>
+                <div className="text-2xl font-bold text-gray-900">Marketplace</div>
+                <div className="text-sm text-gray-600">Community Templates</div>
               </div>
             </div>
           </div>

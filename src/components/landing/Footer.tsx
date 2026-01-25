@@ -14,6 +14,11 @@ import { cn } from "@/lib/utils";
 const FOOTER_LINKS = {
   resources: [
     {
+      label: "Playground Docs",
+      href: "https://docs.nearplay.app",
+      external: true,
+    },
+    {
       label: "NEAR Docs",
       href: "https://docs.near.org/smart-contracts/what-is",
       external: true,
@@ -82,7 +87,7 @@ export function Footer() {
             <p className="text-muted-foreground mb-6 max-w-sm">
               The fastest way to build, test, and deploy NEAR smart contracts.
             </p>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               <Button variant="outline" size="sm" className="gap-2" asChild>
                 <a
                   href="https://github.com/tolgayayci/nearplay"
@@ -95,12 +100,22 @@ export function Footer() {
               </Button>
               <Button variant="outline" size="sm" className="gap-2" asChild>
                 <a
+                  href="https://docs.nearplay.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Playground Docs
+                </a>
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2" asChild>
+                <a
                   href="https://docs.near.org/smart-contracts/what-is"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <ExternalLink className="h-4 w-4" />
-                  Documentation
+                  NEAR Docs
                 </a>
               </Button>
             </div>

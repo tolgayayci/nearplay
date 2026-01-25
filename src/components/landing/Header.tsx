@@ -68,7 +68,21 @@ export function Header() {
                 }`}
               >
                 <BookOpen className="h-4 w-4" />
-                Docs
+                NEAR Docs
+              </a>
+
+              <a
+                href="https://docs.nearplay.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                  isScrolled
+                    ? "text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-white/50"
+                }`}
+              >
+                <BookOpen className="h-4 w-4" />
+                Playground Docs
               </a>
 
               <a
@@ -155,7 +169,17 @@ export function Header() {
                 className="flex items-center gap-2 w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg font-medium"
               >
                 <BookOpen className="h-4 w-4" />
-                Documentation
+                NEAR Docs
+              </a>
+
+              <a
+                href="https://docs.nearplay.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg font-medium"
+              >
+                <BookOpen className="h-4 w-4" />
+                Playground Docs
               </a>
 
               <a
