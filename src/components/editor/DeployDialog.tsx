@@ -50,7 +50,6 @@ import {
   WalletDeploymentResult,
   estimateDeploymentCost,
   formatYoctoNear,
-  getExplorerAccountUrl as getWalletExplorerAccountUrl,
   checkFactoryAvailability,
   WalletDeploymentNotSupportedError,
 } from '@/lib/walletDeployment';
@@ -134,7 +133,8 @@ export function DeployDialog({
   useEffect(() => {
     if (open && deploymentMode === 'wallet') {
       setIsCheckingFactory(true);
-      checkFactoryAvailability(network)
+      // Use user's selected RPC for checking factory availability
+      checkFactoryAvailability(network, getCurrentRpcUrl(network))
         .then(available => {
           setFactoryAvailable(available);
         })
@@ -145,7 +145,7 @@ export function DeployDialog({
           setIsCheckingFactory(false);
         });
     }
-  }, [open, deploymentMode, network]);
+  }, [open, deploymentMode, network, getCurrentRpcUrl]);
 
   const handlePlaygroundDeploy = async () => {
     if (showABIError) return;
@@ -348,6 +348,18 @@ export function DeployDialog({
       : deploymentResult.explorerUrl;
   };
 
+  // Get the account explorer URL - uses stored URL for wallet deployments to preserve correct network
+  const getAccountExplorerUrl = () => {
+    if (!deploymentResult) return '';
+    // For wallet deployments, use the stored explorerAccountUrl (captures correct network at deployment time)
+    if ('explorerAccountUrl' in deploymentResult && deploymentResult.explorerAccountUrl) {
+      return deploymentResult.explorerAccountUrl;
+    }
+    // For playground deployments (always testnet), generate the URL
+    const contractId = getContractId();
+    return getExplorerAccountUrl(contractId); // defaults to testnet
+  };
+
   // ABI Error State
   if (showABIError) {
     return (
@@ -518,12 +530,12 @@ export function DeployDialog({
                       <p className="text-blue-800 dark:text-blue-200">
                         This deployment uses{' '}
                         <a
-                          href={getExplorerAccountUrl(network === 'mainnet' ? 'factory.nearplay.near' : 'factory.nearplay.testnet', network)}
+                          href={getExplorerAccountUrl(network === 'mainnet' ? 'factory.nearplay-app.near' : 'factory.nearplay.testnet', network)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="font-medium underline hover:no-underline"
                         >
-                          {network === 'mainnet' ? 'factory.nearplay.near' : 'factory.nearplay.testnet'}
+                          {network === 'mainnet' ? 'factory.nearplay-app.near' : 'factory.nearplay.testnet'}
                         </a>
                         {' '}to create your contract account.
                       </p>
@@ -645,12 +657,7 @@ export function DeployDialog({
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
-                        onClick={() => {
-                          const url = deploymentMode === 'wallet'
-                            ? getWalletExplorerAccountUrl(getContractId(), network)
-                            : getExplorerAccountUrl(getContractId());
-                          window.open(url, '_blank');
-                        }}
+                        onClick={() => window.open(getAccountExplorerUrl(), '_blank')}
                       >
                         <ExternalLink className="h-3 w-3" />
                       </Button>

@@ -38,7 +38,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getFaucetStatus, requestFaucet } from '@/lib/api';
+import { requestFaucet } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import type { FaucetRequest, FaucetStatusResponse } from '@/lib/types';
@@ -103,17 +103,9 @@ export function FaucetTab({ userId }: FaucetTabProps) {
     },
   });
 
-  const fetchStatus = async () => {
+  const fetchData = async () => {
     try {
-      const faucetStatus = await getFaucetStatus(userId);
-      setStatus(faucetStatus);
-    } catch (error) {
-      console.error('Failed to fetch faucet status:', error);
-    }
-  };
-
-  const fetchHistory = async () => {
-    try {
+      // Query Supabase directly for faucet history (bypass backend)
       const { data, error } = await supabase
         .from('faucet_requests')
         .select('*')
@@ -124,34 +116,36 @@ export function FaucetTab({ userId }: FaucetTabProps) {
       if (error) throw error;
       setHistory(data || []);
 
-      const latestSuccess = data?.find(r => r.status === 'success');
-      if (latestSuccess) {
-        const requestTime = new Date(latestSuccess.created_at).getTime();
+      // Compute rate limit from history - check both success AND pending requests
+      // to prevent bypass by spamming while previous request is pending
+      const latestRequest = data?.find((r: any) =>
+        r.status === 'success' || r.status === 'pending'
+      );
+      if (latestRequest) {
+        const requestTime = new Date(latestRequest.created_at).getTime();
         const nextAvailable = requestTime + 24 * 60 * 60 * 1000;
-        const now = Date.now();
+        const canRequestNow = Date.now() >= nextAvailable;
 
-        if (now < nextAvailable) {
-          setStatus(prev => prev ? {
-            ...prev,
-            can_request: false,
-            last_request_at: latestSuccess.created_at,
-            next_available_at: new Date(nextAvailable).toISOString(),
-          } : {
-            can_request: false,
-            last_request_at: latestSuccess.created_at,
-            next_available_at: new Date(nextAvailable).toISOString(),
-          });
-        }
+        setStatus({
+          can_request: canRequestNow,
+          last_request_at: latestRequest.created_at,
+          next_available_at: canRequestNow ? undefined : new Date(nextAvailable).toISOString(),
+        });
+      } else {
+        // No previous requests, allow
+        setStatus({ can_request: true });
       }
     } catch (error) {
-      console.error('Failed to fetch faucet history:', error);
+      console.error('Failed to fetch faucet data:', error);
+      // On error, allow request (backend will validate)
+      setStatus({ can_request: true });
     }
   };
 
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      await Promise.all([fetchStatus(), fetchHistory()]);
+      await fetchData();
       setIsLoading(false);
     };
     loadData();
@@ -186,13 +180,58 @@ export function FaucetTab({ userId }: FaucetTabProps) {
     return () => clearInterval(interval);
   }, [status?.next_available_at, status?.can_request]);
 
-  const canRequest = status?.can_request ?? true;
+  // Compute next available time from history if not in status
+  const lastSuccessfulRequest = history.find(h => h.status === 'success');
+  const lastActiveRequest = history.find(h => h.status === 'success' || h.status === 'pending');
+  const nextAvailableTime = status?.next_available_at
+    ? new Date(status.next_available_at)
+    : lastActiveRequest
+      ? new Date(new Date(lastActiveRequest.created_at).getTime() + 24 * 60 * 60 * 1000)
+      : null;
+
+  const isRateLimited = nextAvailableTime && nextAvailableTime.getTime() > Date.now();
+  const canRequest = !isLoading && !isRateLimited;
 
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     setResult(null);
 
     try {
+      // Frontend rate limit check - verify 24 hours have passed since last request (success or pending)
+      const { data: lastRequest } = await supabase
+        .from('faucet_requests')
+        .select('created_at, status')
+        .eq('user_id', userId)
+        .in('status', ['success', 'pending'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (lastRequest) {
+        const lastRequestTime = new Date(lastRequest.created_at).getTime();
+        const nextAvailable = lastRequestTime + 24 * 60 * 60 * 1000;
+        const now = Date.now();
+
+        if (now < nextAvailable) {
+          const nextAvailableDate = new Date(nextAvailable);
+          setStatus(prev => prev ? {
+            ...prev,
+            can_request: false,
+            next_available_at: nextAvailableDate.toISOString(),
+          } : {
+            can_request: false,
+            last_request_at: lastRequest.created_at,
+            next_available_at: nextAvailableDate.toISOString(),
+          });
+          setResult({
+            success: false,
+            message: `You can request again at ${nextAvailableDate.toLocaleTimeString()}`,
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const { data: faucetRequest, error: dbError } = await supabase
         .from('faucet_requests')
         .insert({
@@ -209,13 +248,18 @@ export function FaucetTab({ userId }: FaucetTabProps) {
       const response = await requestFaucet(userId, data.recipientAccount);
 
       if (response.success) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('faucet_requests')
           .update({
             status: 'success',
             transaction_hash: response.transaction_hash,
+            explorer_url: response.explorer_url,
           })
           .eq('id', faucetRequest.id);
+
+        if (updateError) {
+          console.error('Failed to update faucet request status:', updateError);
+        }
 
         setResult({
           success: true,
@@ -229,9 +273,9 @@ export function FaucetTab({ userId }: FaucetTabProps) {
         });
 
         form.reset();
-        await Promise.all([fetchStatus(), fetchHistory()]);
+        await fetchData();
       } else {
-        await supabase
+        const { error: updateError } = await supabase
           .from('faucet_requests')
           .update({
             status: 'failed',
@@ -239,11 +283,15 @@ export function FaucetTab({ userId }: FaucetTabProps) {
           })
           .eq('id', faucetRequest.id);
 
+        if (updateError) {
+          console.error('Failed to update faucet request status:', updateError);
+        }
+
         setResult({
           success: false,
           message: response.error || 'Request failed',
         });
-        await fetchHistory();
+        await fetchData();
       }
     } catch (error) {
       setResult({
@@ -341,13 +389,35 @@ export function FaucetTab({ userId }: FaucetTabProps) {
               </div>
             </div>
 
-            {countdown && (
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <Clock className="h-4 w-4 text-amber-600" />
-                <div>
-                  <p className="text-sm text-amber-600">Next request available in</p>
-                  <p className="font-semibold text-amber-700">{countdown}</p>
+            {!isLoading && isRateLimited && nextAvailableTime && (
+              <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-2">
+                <div className="flex items-center gap-3">
+                  <Clock className="h-4 w-4 text-amber-600" />
+                  <p className="text-sm text-amber-600">You have already requested tokens</p>
                 </div>
+                <p className="text-sm text-amber-700 ml-7">
+                  You can request again at{' '}
+                  <strong>
+                    {nextAvailableTime.toLocaleDateString()}{' '}
+                    {nextAvailableTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </strong>
+                  {countdown && <span className="text-amber-500"> ({countdown})</span>}
+                </p>
+              </div>
+            )}
+
+            {!isLoading && lastSuccessfulRequest?.transaction_hash && (
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <span className="text-sm text-muted-foreground">Latest transaction</span>
+                <a
+                  href={`https://testnet.nearblocks.io/txns/${lastSuccessfulRequest.transaction_hash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline flex items-center gap-1 font-mono text-xs"
+                >
+                  {lastSuccessfulRequest.transaction_hash.slice(0, 8)}...{lastSuccessfulRequest.transaction_hash.slice(-6)}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
             )}
           </div>
@@ -409,9 +479,9 @@ export function FaucetTab({ userId }: FaucetTabProps) {
                   )}
                 </Button>
 
-                {!canRequest && !countdown && (
+                {isLoading && (
                   <p className="text-sm text-muted-foreground text-center">
-                    You've already requested tokens today.
+                    Checking availability...
                   </p>
                 )}
 

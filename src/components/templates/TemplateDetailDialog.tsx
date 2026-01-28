@@ -321,12 +321,12 @@ export function TemplateDetailDialog({
                   {template.is_official && (
                     <Badge
                       variant="outline"
-                      className="bg-blue-500/10 text-blue-500 border-blue-500/20"
+                      className="bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20"
                     >
-                      Official
+                      NEAR Playground
                     </Badge>
                   )}
-                  {template.is_featured && (
+                  {template.is_featured && !template.is_official && (
                     <Badge className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white border-0">
                       <Star className="h-3 w-3 mr-1" />
                       Featured
@@ -384,7 +384,7 @@ export function TemplateDetailDialog({
             </div>
 
             {/* Badges and Stats */}
-            <div className="flex flex-wrap items-center gap-4 mt-3">
+            <div className="flex flex-wrap items-center gap-4 mt-5">
               <div className="flex flex-wrap gap-2">
                 <Badge
                   variant="outline"

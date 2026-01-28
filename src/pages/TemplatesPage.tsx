@@ -69,7 +69,7 @@ export function TemplatesPage() {
       if (template) {
         setSelectedTemplate(template);
         setShowDetailDialog(true);
-        incrementTemplateViews(templateId).catch(console.error);
+        // Note: View count is incremented in handleTemplateClick, not here
       }
       // Clear the query param
       setSearchParams({});
@@ -194,6 +194,14 @@ export function TemplatesPage() {
   };
 
   const handleDeleteTemplate = (template: Template) => {
+    if (template.is_official) {
+      toast({
+        title: 'Cannot delete',
+        description: 'Official templates cannot be deleted',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (!user || template.user_id !== user.id) {
       toast({
         title: 'Unauthorized',

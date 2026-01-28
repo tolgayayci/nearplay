@@ -369,7 +369,7 @@ export function TemplateGallery({
                     Stats
                   </th>
                   <th className="h-12 px-6 text-left text-xs font-medium text-muted-foreground w-[18%]">
-                    Author
+                    Publisher
                   </th>
                   <th className="h-12 px-4 text-left text-xs font-medium text-muted-foreground w-[10%]">
                     Actions
@@ -399,13 +399,13 @@ export function TemplateGallery({
                           >
                             {template.name}
                           </span>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 flex-wrap">
                             {template.is_official && (
-                              <Badge variant="secondary" className="text-xs px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">
-                                Official
+                              <Badge variant="secondary" className="text-xs px-1.5 py-0 bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800">
+                                NEAR Playground
                               </Badge>
                             )}
-                            {template.is_featured && (
+                            {template.is_featured && !template.is_official && (
                               <Badge variant="secondary" className="text-xs px-1.5 py-0 bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800">
                                 Featured
                               </Badge>
@@ -482,7 +482,7 @@ export function TemplateGallery({
                           <Download className="h-3.5 w-3.5" />
                           Use
                         </Button>
-                        {currentUserId && template.user_id === currentUserId && onDeleteTemplate && (
+                        {currentUserId && template.user_id === currentUserId && !template.is_official && onDeleteTemplate && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button

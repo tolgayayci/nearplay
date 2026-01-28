@@ -1,4 +1,6 @@
 import { WalletSelector } from '@near-wallet-selector/core';
+import { transactions } from 'near-api-js';
+import BN from 'bn.js';
 import { Network } from '@/contexts/WalletContext';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -6,17 +8,20 @@ const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 // Factory contract addresses for each network
 const FACTORY_CONTRACT = {
   testnet: 'factory.nearplay.testnet',
-  mainnet: 'factory.nearplay.near',
+  mainnet: 'factory.nearplay-app.near',
 };
 
 // Minimum deposit required for factory deployment (covers storage + account creation)
-const FACTORY_DEPOSIT = '3000000000000000000000000'; // 3 NEAR
+// Factory contract requires minimum 2 NEAR
+const FACTORY_DEPOSIT = '2000000000000000000000000'; // 2 NEAR
 
 export interface WalletDeploymentResult {
   success: boolean;
   contractId: string;
   transactionHash: string;
   explorerUrl: string;
+  explorerAccountUrl: string;
+  network: Network;
   gasUsed?: string;
   blockHeight?: number;
   wasm_hash?: string;
@@ -77,15 +82,18 @@ export async function fetchWasmCode(
 
 /**
  * Check if factory contract is deployed and available
+ * @param network - The network to check (testnet or mainnet)
+ * @param rpcUrl - Optional RPC URL to use (from user's RPC settings)
  */
-export async function checkFactoryAvailability(network: Network): Promise<boolean> {
+export async function checkFactoryAvailability(network: Network, rpcUrl?: string): Promise<boolean> {
   const factoryId = FACTORY_CONTRACT[network];
   try {
-    const rpcUrl = network === 'mainnet'
-      ? 'https://rpc.mainnet.near.org'
-      : 'https://rpc.testnet.near.org';
+    // Use provided RPC URL or fallback to defaults
+    const url = rpcUrl || (network === 'mainnet'
+      ? 'https://free.rpc.fastnear.com'
+      : 'https://rpc.testnet.near.org');
 
-    const response = await fetch(rpcUrl, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -140,23 +148,23 @@ export async function deployWithFactory(
   const factoryId = FACTORY_CONTRACT[network];
 
   // Call factory.deploy_contract() with FunctionCall action
-  // This is supported by ALL wallets
+  // Using NAJ format for Hot Wallet compatibility
+  const args = {
+    name: contractName,
+    code: Array.from(wasmCode), // Convert Uint8Array to number array for JSON
+  };
+  const argsBuffer = Buffer.from(JSON.stringify(args));
+
   const result = await wallet.signAndSendTransaction({
     signerId: signerAccountId,
     receiverId: factoryId,
     actions: [
-      {
-        type: 'FunctionCall',
-        params: {
-          methodName: 'deploy_contract',
-          args: {
-            name: contractName,
-            code: Array.from(wasmCode), // Convert Uint8Array to number array for JSON
-          },
-          gas: '300000000000000', // 300 TGas
-          deposit: FACTORY_DEPOSIT, // 3 NEAR for storage
-        },
-      },
+      transactions.functionCall(
+        'deploy_contract',
+        argsBuffer,
+        new BN('300000000000000'), // 300 TGas
+        new BN(FACTORY_DEPOSIT), // 3 NEAR for storage
+      ),
     ],
   });
 
@@ -178,19 +186,22 @@ export async function deployWithFactory(
     transactionHash = String(result);
   }
 
-  // The deployed contract will be at: contractName.factory.nearplay.testnet
+  // The deployed contract will be at: contractName.factory.nearplay-app.near (mainnet) or factory.nearplay.testnet (testnet)
   const deployedContractId = `${contractName}.${factoryId}`;
 
   const explorerBase = network === 'mainnet'
     ? 'https://nearblocks.io'
     : 'https://testnet.nearblocks.io';
   const explorerUrl = `${explorerBase}/txns/${transactionHash}`;
+  const explorerAccountUrl = `${explorerBase}/address/${deployedContractId}`;
 
   return {
     success: true,
     contractId: deployedContractId,
     transactionHash,
     explorerUrl,
+    explorerAccountUrl,
+    network,
     blockHeight,
   };
 }

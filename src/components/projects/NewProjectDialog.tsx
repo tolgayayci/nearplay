@@ -2,16 +2,17 @@ import { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { 
-  Code2, 
-  Sparkles, 
-  ArrowRight, 
+import {
+  Code2,
+  Sparkles,
+  ArrowRight,
   AlertCircle,
   FileCode,
   Terminal,
   Braces,
   Plus,
   FileCode2,
+  Loader2,
 } from 'lucide-react';
 import {
   Dialog,
@@ -24,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PROJECT_TEMPLATES } from '@/lib/templates';
+import { getTemplates } from '@/lib/templates-api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -37,6 +39,7 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import type { Template } from '@/lib/types';
 
 const formSchema = z.object({
   name: z.string()
@@ -46,11 +49,39 @@ const formSchema = z.object({
   description: z.string().max(200).optional(),
 });
 
+// Combined template type for both local and database templates
+export interface CombinedTemplate {
+  id?: string;
+  name: string;
+  description: string;
+  icon: any;
+  code?: string;  // Only for local templates
+  category: string;
+  difficulty: string;
+  isOfficial?: boolean;
+  isOpenZeppelin?: boolean;
+  isCommunity?: boolean;
+}
+
 interface NewProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreateProject: (data: { name: string; description: string; template?: typeof PROJECT_TEMPLATES[0] }) => void;
+  onCreateProject: (data: {
+    name: string;
+    description: string;
+    template?: CombinedTemplate;
+    officialTemplateId?: string;
+  }) => void;
 }
+
+// Icon map for database templates
+const iconMap: Record<string, any> = {
+  Code2,
+  MessageCircle: Code2, // Fallback
+  Coins: Code2,
+  Image: Code2,
+  Link2: Code2,
+};
 
 export function NewProjectDialog({
   open,
@@ -58,7 +89,9 @@ export function NewProjectDialog({
   onCreateProject,
 }: NewProjectDialogProps) {
   const [activeTab, setActiveTab] = useState<'blank' | 'template'>('blank');
-  const [selectedTemplate, setSelectedTemplate] = useState<typeof PROJECT_TEMPLATES[0] | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<CombinedTemplate | null>(null);
+  const [officialTemplates, setOfficialTemplates] = useState<Template[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -68,6 +101,44 @@ export function NewProjectDialog({
       description: '',
     },
   });
+
+  // Fetch official templates when dialog opens
+  useEffect(() => {
+    if (open) {
+      fetchOfficialTemplates();
+    }
+  }, [open]);
+
+  const fetchOfficialTemplates = async () => {
+    try {
+      setIsLoadingTemplates(true);
+      const templates = await getTemplates({ official: true });
+      // Sort by display_order if available, otherwise by name
+      templates.sort((a, b) => {
+        // Official templates have specific IDs that determine order
+        const orderA = getTemplateOrder(a.id);
+        const orderB = getTemplateOrder(b.id);
+        return orderA - orderB;
+      });
+      setOfficialTemplates(templates);
+    } catch (error) {
+      console.error('Error fetching official templates:', error);
+    } finally {
+      setIsLoadingTemplates(false);
+    }
+  };
+
+  // Get order for official templates based on their UUID
+  const getTemplateOrder = (id: string) => {
+    const orderMap: Record<string, number> = {
+      '00000000-0000-0000-0000-000000000001': 1, // Counter
+      '00000000-0000-0000-0000-000000000002': 2, // Hello World
+      '00000000-0000-0000-0000-000000000003': 3, // Fungible Token
+      '00000000-0000-0000-0000-000000000004': 4, // NFT
+      '00000000-0000-0000-0000-000000000005': 5, // Cross Contract
+    };
+    return orderMap[id] || 999;
+  };
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -99,10 +170,34 @@ export function NewProjectDialog({
     onCreateProject({
       name: data.name.trim(),
       description: data.description?.trim() || '',
-      template: selectedTemplate,
+      template: selectedTemplate || undefined,
+      officialTemplateId: selectedTemplate?.isOfficial ? selectedTemplate.id : undefined,
     });
     onOpenChange(false);
   };
+
+  // Convert official database template to combined template
+  const convertOfficialTemplate = (template: Template): CombinedTemplate => ({
+    id: template.id,
+    name: template.name,
+    description: template.description || '',
+    icon: iconMap[template.icon] || Code2,
+    category: template.category,
+    difficulty: template.difficulty,
+    isOfficial: true,
+  });
+
+  // Convert local template to combined template
+  const convertLocalTemplate = (template: typeof PROJECT_TEMPLATES[0]): CombinedTemplate => ({
+    name: template.name,
+    description: template.description,
+    icon: template.icon,
+    code: template.code,
+    category: template.category,
+    difficulty: template.difficulty,
+    isOpenZeppelin: (template as any).isOpenZeppelin,
+    isCommunity: (template as any).isCommunity,
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -162,8 +257,8 @@ export function NewProjectDialog({
                               Project Name
                             </FormLabel>
                             <FormControl>
-                              <Input 
-                                placeholder="my-awesome-project" 
+                              <Input
+                                placeholder="my-awesome-project"
                                 {...field}
                                 className="font-mono"
                               />
@@ -186,7 +281,7 @@ export function NewProjectDialog({
                               Description (Optional)
                             </FormLabel>
                             <FormControl>
-                              <Input 
+                              <Input
                                 placeholder="A brief description of your project"
                                 {...field}
                               />
@@ -235,49 +330,107 @@ export function NewProjectDialog({
               {/* Template Selection */}
               <div className="border rounded-lg overflow-hidden">
                 <ScrollArea className="h-[400px]">
-                  <div className="divide-y">
-                    {PROJECT_TEMPLATES.map((template, index) => (
-                      <div
-                        key={index}
-                        onClick={() => !template.isOpenZeppelin && setSelectedTemplate(template)}
-                        className={cn(
-                          "p-4 flex items-center gap-4 transition-colors",
-                          !template.isOpenZeppelin && "cursor-pointer hover:bg-accent",
-                          selectedTemplate?.name === template.name && "bg-accent",
-                          template.isOpenZeppelin && "opacity-75"
-                        )}
-                      >
-                        <div className="flex-none p-3 rounded-lg bg-primary/10">
-                          <template.icon className="h-5 w-5 text-primary" />
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-medium">{template.name}</h3>
-                            {template.isOpenZeppelin && (
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="bg-blue-500/10 text-blue-500">
-                                  OpenZeppelin
-                                </Badge>
-                                <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500">
-                                  Coming Soon
+                  {isLoadingTemplates ? (
+                    <div className="flex items-center justify-center h-full py-12">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {/* Official Templates from Database */}
+                      {officialTemplates.map((template) => {
+                        const combined = convertOfficialTemplate(template);
+                        return (
+                          <div
+                            key={template.id}
+                            onClick={() => setSelectedTemplate(combined)}
+                            className={cn(
+                              "p-4 flex items-center gap-4 transition-colors cursor-pointer hover:bg-accent",
+                              selectedTemplate?.id === template.id && "bg-accent"
+                            )}
+                          >
+                            <div className="flex-none p-3 rounded-lg bg-primary/10">
+                              <combined.icon className="h-5 w-5 text-primary" />
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <h3 className="font-medium">{template.name}</h3>
+                                <Badge variant="secondary" className="text-xs px-1.5 py-0 bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800">
+                                  NEAR Playground
                                 </Badge>
                               </div>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {template.description}
-                          </p>
-                        </div>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {template.description}
+                              </p>
+                            </div>
 
-                        <ArrowRight className={cn(
-                          "flex-none h-4 w-4 text-muted-foreground transition-opacity",
-                          selectedTemplate?.name === template.name ? "opacity-100" : "opacity-0",
-                          template.isOpenZeppelin && "opacity-0"
-                        )} />
-                      </div>
-                    ))}
-                  </div>
+                            <ArrowRight className={cn(
+                              "flex-none h-4 w-4 text-muted-foreground transition-opacity",
+                              selectedTemplate?.id === template.id ? "opacity-100" : "opacity-0"
+                            )} />
+                          </div>
+                        );
+                      })}
+
+                      {/* Separator if both official and local templates exist */}
+                      {officialTemplates.length > 0 && PROJECT_TEMPLATES.length > 0 && (
+                        <div className="py-2 px-4 bg-muted/50 text-xs font-medium text-muted-foreground">
+                          Community Templates
+                        </div>
+                      )}
+
+                      {/* Local/Legacy Templates */}
+                      {PROJECT_TEMPLATES.map((template, index) => {
+                        const combined = convertLocalTemplate(template);
+                        return (
+                          <div
+                            key={`local-${index}`}
+                            onClick={() => !template.isOpenZeppelin && setSelectedTemplate(combined)}
+                            className={cn(
+                              "p-4 flex items-center gap-4 transition-colors",
+                              !template.isOpenZeppelin && "cursor-pointer hover:bg-accent",
+                              selectedTemplate?.name === template.name && !selectedTemplate?.isOfficial && "bg-accent",
+                              template.isOpenZeppelin && "opacity-75"
+                            )}
+                          >
+                            <div className="flex-none p-3 rounded-lg bg-primary/10">
+                              <template.icon className="h-5 w-5 text-primary" />
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-medium">{template.name}</h3>
+                                {template.isOpenZeppelin && (
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="bg-blue-500/10 text-blue-500">
+                                      OpenZeppelin
+                                    </Badge>
+                                    <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500">
+                                      Coming Soon
+                                    </Badge>
+                                  </div>
+                                )}
+                                {(template as any).isCommunity && (
+                                  <Badge variant="outline" className="bg-purple-500/10 text-purple-500">
+                                    Community
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {template.description}
+                              </p>
+                            </div>
+
+                            <ArrowRight className={cn(
+                              "flex-none h-4 w-4 text-muted-foreground transition-opacity",
+                              selectedTemplate?.name === template.name && !selectedTemplate?.isOfficial ? "opacity-100" : "opacity-0",
+                              template.isOpenZeppelin && "opacity-0"
+                            )} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </ScrollArea>
               </div>
 
@@ -296,7 +449,7 @@ export function NewProjectDialog({
                               Project Name
                             </FormLabel>
                             <FormControl>
-                              <Input 
+                              <Input
                                 {...field}
                                 className="font-mono"
                               />
@@ -328,8 +481,8 @@ export function NewProjectDialog({
                       <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                       </Button>
-                      <Button 
-                        type="submit" 
+                      <Button
+                        type="submit"
                         className="gap-2"
                         disabled={selectedTemplate.isOpenZeppelin}
                       >

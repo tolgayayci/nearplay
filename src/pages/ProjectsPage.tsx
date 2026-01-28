@@ -14,11 +14,12 @@ import { ProjectHeader } from '@/components/projects/ProjectHeader';
 import { ProjectTabs, SortOption, NetworkFilter, WalletFilter } from '@/components/projects/ProjectTabs';
 import { ProjectEditDialog } from '@/components/projects/ProjectEditDialog';
 import { ProjectDeleteDialog } from '@/components/projects/ProjectDeleteDialog';
-import { NewProjectDialog } from '@/components/projects/NewProjectDialog';
+import { NewProjectDialog, CombinedTemplate } from '@/components/projects/NewProjectDialog';
 import { GitHubImportDialog } from '@/components/projects/GitHubImportDialog';
 import { FaucetDialog } from '@/components/faucet';
 import { SEO } from '@/components/seo/SEO';
 import { initializeProject, exportProject } from '@/lib/api';
+import { useTemplate, incrementTemplateUses } from '@/lib/templates-api';
 
 export function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -226,7 +227,8 @@ export function ProjectsPage() {
   const handleCreateProject = async (data: {
     name: string;
     description: string;
-    template?: typeof PROJECT_TEMPLATES[0];
+    template?: CombinedTemplate;
+    officialTemplateId?: string;
   }) => {
     if (!user) {
       toast({
@@ -238,16 +240,17 @@ export function ProjectsPage() {
     }
 
     try {
-      const templateCode = data.template?.code || '';
+      // Check if this is an official template from the database
+      const isOfficialTemplate = data.officialTemplateId && data.template?.isOfficial;
 
-      // Create project with empty code if no template is provided
+      // Create project record first
       const { data: project, error } = await supabase
         .from('projects')
         .insert({
           user_id: user.id,
           name: data.name,
           description: data.description || '',
-          code: templateCode,
+          code: '', // Code will be set from template files
           updated_at: new Date().toISOString(),
           last_activity_at: new Date().toISOString(),
         })
@@ -256,9 +259,18 @@ export function ProjectsPage() {
 
       if (error) throw error;
 
-      // Initialize the project filesystem with template code
+      // Initialize project filesystem
       try {
-        await initializeProject(user.id, project.id, templateCode || undefined);
+        if (isOfficialTemplate && data.officialTemplateId) {
+          // Use the template API to copy files from official template
+          await useTemplate(data.officialTemplateId, user.id, project.id);
+          // Increment template uses count
+          await incrementTemplateUses(data.officialTemplateId);
+        } else {
+          // Use local template code or blank project
+          const templateCode = data.template?.code || '';
+          await initializeProject(user.id, project.id, templateCode || undefined);
+        }
       } catch (initError) {
         console.error('Failed to initialize project filesystem:', initError);
         // Don't fail the whole operation if filesystem init fails

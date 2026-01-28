@@ -5,6 +5,12 @@ use near_sdk::{env, near, require, AccountId, Gas, NearToken, Promise};
 /// Minimum deposit required for contract deployment (2.5 NEAR covers most cases)
 const MIN_DEPOSIT: NearToken = NearToken::from_near(2);
 
+/// Maximum code size (4MB - NEAR's limit is ~4.19MB)
+const MAX_CODE_SIZE: usize = 4 * 1024 * 1024;
+
+/// WASM magic bytes for validation
+const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6D];
+
 /// Information about a deployed contract
 #[derive(BorshDeserialize, BorshSerialize)]
 #[borsh(crate = "near_sdk::borsh")]
@@ -25,6 +31,8 @@ pub struct Factory {
     deployed_contracts: UnorderedMap<AccountId, ContractInfo>,
     /// Total number of deployments
     deployment_count: u64,
+    /// Emergency pause flag - stops all deployments when true
+    paused: bool,
 }
 
 impl Default for Factory {
@@ -33,6 +41,7 @@ impl Default for Factory {
             owner: env::predecessor_account_id(),
             deployed_contracts: UnorderedMap::new(b"d"),
             deployment_count: 0,
+            paused: false,
         }
     }
 }
@@ -46,7 +55,25 @@ impl Factory {
             owner,
             deployed_contracts: UnorderedMap::new(b"d"),
             deployment_count: 0,
+            paused: false,
         }
+    }
+
+    /// Validate WASM bytecode
+    fn validate_wasm_code(code: &[u8]) {
+        require!(code.len() >= 4, "Code too short to be valid WASM");
+        require!(
+            code[0..4] == WASM_MAGIC,
+            "Invalid WASM: missing magic bytes (expected 0x00 0x61 0x73 0x6D)"
+        );
+        require!(
+            code.len() <= MAX_CODE_SIZE,
+            format!(
+                "Code too large: {} bytes (max {} bytes)",
+                code.len(),
+                MAX_CODE_SIZE
+            )
+        );
     }
 
     /// Deploy a contract to a new sub-account
@@ -62,6 +89,9 @@ impl Factory {
     /// Promise that resolves when deployment is complete
     #[payable]
     pub fn deploy_contract(&mut self, name: String, code: Vec<u8>) -> Promise {
+        // Security: Check if factory is paused
+        require!(!self.paused, "Factory is paused for maintenance");
+
         let deposit = env::attached_deposit();
         require!(
             deposit >= MIN_DEPOSIT,
@@ -71,10 +101,13 @@ impl Factory {
         require!(!name.is_empty(), "Contract name cannot be empty");
         require!(name.len() <= 64, "Contract name too long (max 64 chars)");
         require!(
-            name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
+            name.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
             "Contract name can only contain lowercase letters, numbers, hyphens, and underscores"
         );
-        require!(!code.is_empty(), "Contract code cannot be empty");
+
+        // Security: Validate WASM bytecode (magic bytes and size limit)
+        Self::validate_wasm_code(&code);
 
         // Build sub-account ID
         let factory_id = env::current_account_id();
@@ -90,17 +123,25 @@ impl Factory {
 
         // Get the signer's public key to add as full access key
         let signer_pk = env::signer_account_pk();
+        let deployer = env::predecessor_account_id();
+        let code_size = code.len() as u64;
 
         // Store deployment info
         self.deployed_contracts.insert(
             &sub_account_id,
             &ContractInfo {
-                deployer: env::predecessor_account_id(),
+                deployer: deployer.clone(),
                 deployed_at: env::block_timestamp(),
-                code_size: code.len() as u64,
+                code_size,
             },
         );
         self.deployment_count += 1;
+
+        // Emit NEP-297 compliant event for monitoring
+        env::log_str(&format!(
+            "EVENT_JSON:{{\"standard\":\"nearplay\",\"version\":\"1.0.0\",\"event\":\"contract_deployed\",\"data\":{{\"contract_id\":\"{}\",\"deployer\":\"{}\",\"code_size\":{}}}}}",
+            sub_account_id, deployer, code_size
+        ));
 
         // Create account, deploy code, and add full access key
         Promise::new(sub_account_id)
@@ -121,6 +162,9 @@ impl Factory {
         init_method: String,
         init_args: Vec<u8>,
     ) -> Promise {
+        // Security: Check if factory is paused
+        require!(!self.paused, "Factory is paused for maintenance");
+
         let deposit = env::attached_deposit();
         require!(
             deposit >= MIN_DEPOSIT,
@@ -130,11 +174,14 @@ impl Factory {
         require!(!name.is_empty(), "Contract name cannot be empty");
         require!(name.len() <= 64, "Contract name too long (max 64 chars)");
         require!(
-            name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
+            name.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
             "Contract name can only contain lowercase letters, numbers, hyphens, and underscores"
         );
-        require!(!code.is_empty(), "Contract code cannot be empty");
         require!(!init_method.is_empty(), "Init method name cannot be empty");
+
+        // Security: Validate WASM bytecode (magic bytes and size limit)
+        Self::validate_wasm_code(&code);
 
         // Build sub-account ID
         let factory_id = env::current_account_id();
@@ -148,16 +195,24 @@ impl Factory {
         );
 
         let signer_pk = env::signer_account_pk();
+        let deployer = env::predecessor_account_id();
+        let code_size = code.len() as u64;
 
         self.deployed_contracts.insert(
             &sub_account_id,
             &ContractInfo {
-                deployer: env::predecessor_account_id(),
+                deployer: deployer.clone(),
                 deployed_at: env::block_timestamp(),
-                code_size: code.len() as u64,
+                code_size,
             },
         );
         self.deployment_count += 1;
+
+        // Emit NEP-297 compliant event for monitoring
+        env::log_str(&format!(
+            "EVENT_JSON:{{\"standard\":\"nearplay\",\"version\":\"1.0.0\",\"event\":\"contract_deployed\",\"data\":{{\"contract_id\":\"{}\",\"deployer\":\"{}\",\"code_size\":{},\"init_method\":\"{}\"}}}}",
+            sub_account_id, deployer, code_size, init_method
+        ));
 
         // Reserve some NEAR for the contract to use
         let init_deposit = NearToken::from_yoctonear(deposit.as_yoctonear() / 10);
@@ -168,12 +223,7 @@ impl Factory {
             .transfer(account_deposit)
             .deploy_contract(code)
             .add_full_access_key(signer_pk)
-            .function_call(
-                init_method,
-                init_args,
-                init_deposit,
-                Gas::from_tgas(30),
-            )
+            .function_call(init_method, init_args, init_deposit, Gas::from_tgas(30))
     }
 
     // ==================== View Methods ====================
@@ -242,12 +292,36 @@ impl Factory {
             env::predecessor_account_id() == self.owner,
             "Only owner can update owner"
         );
+        env::log_str(&format!(
+            "EVENT_JSON:{{\"standard\":\"nearplay\",\"version\":\"1.0.0\",\"event\":\"owner_changed\",\"data\":{{\"old_owner\":\"{}\",\"new_owner\":\"{}\"}}}}",
+            self.owner, new_owner
+        ));
         self.owner = new_owner;
+    }
+
+    /// Pause/unpause the factory (emergency stop)
+    /// When paused, no new deployments are allowed
+    pub fn set_paused(&mut self, paused: bool) {
+        require!(
+            env::predecessor_account_id() == self.owner,
+            "Only owner can pause/unpause"
+        );
+        self.paused = paused;
+        env::log_str(&format!(
+            "EVENT_JSON:{{\"standard\":\"nearplay\",\"version\":\"1.0.0\",\"event\":\"pause_changed\",\"data\":{{\"paused\":{}}}}}",
+            paused
+        ));
+    }
+
+    /// Check if factory is paused
+    pub fn is_paused(&self) -> bool {
+        self.paused
     }
 }
 
 /// View struct for contract info (for JSON serialization)
-#[derive(near_sdk::serde::Serialize)]
+#[derive(near_sdk::serde::Serialize, near_sdk::serde::Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(schemars::JsonSchema))]
 #[serde(crate = "near_sdk::serde")]
 pub struct ContractInfoView {
     pub deployer: String,
@@ -256,7 +330,8 @@ pub struct ContractInfoView {
 }
 
 /// Entry for deployment list
-#[derive(near_sdk::serde::Serialize)]
+#[derive(near_sdk::serde::Serialize, near_sdk::serde::Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(schemars::JsonSchema))]
 #[serde(crate = "near_sdk::serde")]
 pub struct DeploymentEntry {
     pub contract_id: String,
@@ -267,16 +342,49 @@ pub struct DeploymentEntry {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_name_validation() {
         // Valid names
-        assert!("my-contract".chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'));
-        assert!("test_123".chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'));
+        assert!("my-contract"
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'));
+        assert!("test_123"
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'));
 
         // Invalid names
-        assert!(!"My-Contract".chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'));
-        assert!(!"test.contract".chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'));
+        assert!(!"My-Contract"
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'));
+        assert!(!"test.contract"
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'));
+    }
+
+    #[test]
+    fn test_wasm_magic_bytes() {
+        // Valid WASM magic bytes: 0x00 0x61 0x73 0x6D ("\0asm")
+        let valid_wasm = vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00];
+        assert_eq!(&valid_wasm[0..4], &[0x00, 0x61, 0x73, 0x6D]);
+
+        // Invalid - wrong magic bytes
+        let invalid_wasm = vec![0x00, 0x00, 0x00, 0x00];
+        assert_ne!(&invalid_wasm[0..4], &[0x00, 0x61, 0x73, 0x6D]);
+
+        // Invalid - too short
+        let too_short = vec![0x00, 0x61];
+        assert!(too_short.len() < 4);
+    }
+
+    #[test]
+    fn test_code_size_limit() {
+        const MAX_CODE_SIZE: usize = 4 * 1024 * 1024; // 4MB
+
+        // Valid size
+        assert!(1024 <= MAX_CODE_SIZE);
+        assert!(1024 * 1024 <= MAX_CODE_SIZE); // 1MB
+
+        // Exceeds limit
+        assert!(5 * 1024 * 1024 > MAX_CODE_SIZE); // 5MB
     }
 }

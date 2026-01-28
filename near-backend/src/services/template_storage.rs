@@ -10,6 +10,53 @@ use super::filesystem::{FileNode, FileContent};
 const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024; // 10MB max file size
 const MAX_TREE_DEPTH: usize = 10;
 
+/// Official NEAR example templates to be seeded on startup
+pub struct OfficialTemplate {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub github_url: &'static str,
+    pub branch: &'static str,
+    pub path: Option<&'static str>,
+}
+
+pub const OFFICIAL_TEMPLATES: &[OfficialTemplate] = &[
+    OfficialTemplate {
+        id: "00000000-0000-0000-0000-000000000001",
+        name: "Counter",
+        github_url: "https://github.com/near-examples/counters",
+        branch: "main",
+        path: Some("contract-rs"),
+    },
+    OfficialTemplate {
+        id: "00000000-0000-0000-0000-000000000002",
+        name: "Hello World",
+        github_url: "https://github.com/near-examples/hello-near-examples",
+        branch: "main",
+        path: Some("contract-rs"),
+    },
+    OfficialTemplate {
+        id: "00000000-0000-0000-0000-000000000003",
+        name: "Fungible Token",
+        github_url: "https://github.com/near-examples/FT",
+        branch: "master",
+        path: None,
+    },
+    OfficialTemplate {
+        id: "00000000-0000-0000-0000-000000000004",
+        name: "Non-Fungible Token",
+        github_url: "https://github.com/near-examples/NFT",
+        branch: "master",
+        path: None,
+    },
+    OfficialTemplate {
+        id: "00000000-0000-0000-0000-000000000005",
+        name: "Cross Contract Calls",
+        github_url: "https://github.com/near-examples/cross-contract-calls",
+        branch: "main",
+        path: Some("contract-simple-rs"),
+    },
+];
+
 #[derive(Clone)]
 pub struct TemplateStorageService {
     template_storage_path: PathBuf,
@@ -370,6 +417,39 @@ impl TemplateStorageService {
             fs::rename(&src_path, &dst_path).await?;
         }
 
+        Ok(())
+    }
+
+    /// Seed official templates from GitHub on startup
+    /// Only clones templates that don't already exist in template-storage
+    pub async fn seed_official_templates(&self) -> Result<()> {
+        info!("Checking official templates...");
+
+        for template in OFFICIAL_TEMPLATES {
+            if self.template_exists(template.id).await {
+                info!("Official template '{}' already exists, skipping", template.name);
+                continue;
+            }
+
+            info!("Seeding official template '{}' from GitHub...", template.name);
+
+            match self.clone_from_github(
+                template.id,
+                template.github_url,
+                Some(template.branch),
+                template.path,
+            ).await {
+                Ok(path) => {
+                    info!("Successfully seeded official template '{}' to {}", template.name, path);
+                }
+                Err(e) => {
+                    error!("Failed to seed official template '{}': {}", template.name, e);
+                    // Continue with other templates even if one fails
+                }
+            }
+        }
+
+        info!("Official templates seeding complete");
         Ok(())
     }
 }

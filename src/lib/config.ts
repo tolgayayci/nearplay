@@ -13,7 +13,7 @@ export const NEAR_CONFIG = {
   },
   mainnet: {
     networkId: "mainnet",
-    nodeUrl: "https://rpc.mainnet.near.org",
+    nodeUrl: "https://free.rpc.fastnear.com",
     walletUrl: "https://wallet.near.org",
     helperUrl: "https://helper.mainnet.near.org",
     explorerUrl: "https://nearblocks.io",

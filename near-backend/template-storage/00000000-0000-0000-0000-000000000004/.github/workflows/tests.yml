@@ -1,0 +1,13 @@
+name: Tests
+on: push
+jobs:
+  tests:
+    strategy:
+      matrix:
+        platform: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and test modules
+        run: |
+          cargo test

@@ -1,11 +1,7 @@
 {
   "$schema": "https://mintlify.com/schema.json",
   "name": "NEAR Playground",
-  "logo": {
-    "dark": "/images/logo-dark.svg",
-    "light": "/images/logo-light.svg"
-  },
-  "favicon": "/images/favicon.svg",
+  "favicon": "🎮",
   "colors": {
     "primary": "#00C08B",
     "light": "#00EC97",
@@ -29,7 +25,12 @@
     {
       "name": "GitHub",
       "icon": "github",
-      "url": "https://github.com/nearplay"
+      "url": "https://github.com/tolgayayci/nearplay"
+    },
+    {
+      "name": "NEAR Docs",
+      "icon": "book",
+      "url": "https://docs.near.org/smart-contracts/quickstart"
     }
   ],
   "navigation": [
@@ -38,22 +39,14 @@
       "pages": ["introduction", "quickstart"]
     },
     {
-      "group": "Features",
-      "pages": [
-        "features/editor",
-        "features/compilation",
-        "features/deployment",
-        "features/contract-ui",
-        "features/templates",
-        "features/verification"
-      ]
-    },
-    {
       "group": "Guides",
       "pages": [
-        "guides/first-contract",
-        "guides/testing",
-        "guides/wallet"
+        "guides/projects",
+        "guides/deployments",
+        "guides/publish-template",
+        "guides/embed-button",
+        "guides/faucet",
+        "guides/test-contracts"
       ]
     },
     {
@@ -62,7 +55,7 @@
     }
   ],
   "footerSocials": {
-    "twitter": "https://twitter.com/nearprotocol",
-    "github": "https://github.com/nearplay"
+    "x": "https://x.com/Near_Playground",
+    "github": "https://github.com/tolgayayci/nearplay"
   }
 }

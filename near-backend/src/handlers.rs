@@ -1095,8 +1095,14 @@ pub async fn faucet_request_handler(
         }
         Err(e) => {
             error!("Rate limit check error: {}", e);
-            // If rate limit check fails, allow the request but log warning
-            warn!("Rate limit check failed, allowing request: {}", e);
+            // If rate limit check fails, deny the request for security
+            return Ok(HttpResponse::ServiceUnavailable().json(
+                ApiResponse::<FaucetResponse>::error(
+                    "RATE_LIMIT_CHECK_FAILED".to_string(),
+                    "Unable to verify rate limit. Please try again later.".to_string(),
+                    Some(e.to_string()),
+                ),
+            ));
         }
     }
 
@@ -1209,8 +1215,8 @@ pub async fn faucet_status_handler(
         ),
         Err(e) => {
             warn!("Failed to check rate limit: {}", e);
-            // Default to allowing if check fails
-            (true, None, None)
+            // Default to denying if check fails for security
+            (false, None, None)
         }
     };
 

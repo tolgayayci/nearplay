@@ -1,5 +1,8 @@
 import { callContractMethod } from './api';
 import { ABIMethod } from './types';
+import { WalletSelector } from '@near-wallet-selector/core';
+import { transactions } from 'near-api-js';
+import BN from 'bn.js';
 
 // Parse NEAR-specific types
 export function parseNearValue(value: string, type: string): any {
@@ -253,4 +256,129 @@ export function getMethodTypeLabel(method: ABIMethod): string {
 // Check if method is executable
 export function isMethodExecutable(method: ABIMethod): boolean {
   return method.type === 'function';
+}
+
+// Execute a change method using the connected wallet (for mainnet)
+export async function executeChangeMethodWithWallet(
+  selector: WalletSelector,
+  contractAddress: string,
+  methodName: string,
+  args: Record<string, unknown>,
+  deposit?: string,
+  gas?: string
+): Promise<{
+  success: boolean;
+  result?: any;
+  transactionHash?: string;
+  logs?: string[];
+  error?: string;
+}> {
+  try {
+    const wallet = await selector.wallet();
+    const accounts = await wallet.getAccounts();
+
+    if (!accounts.length) {
+      throw new Error('No wallet account connected');
+    }
+
+    const signerAccountId = accounts[0].accountId;
+
+    // Convert args to Buffer for the function call
+    const argsBuffer = Buffer.from(JSON.stringify(args));
+
+    // Use NAJ format for better wallet compatibility
+    const result = await wallet.signAndSendTransaction({
+      signerId: signerAccountId,
+      receiverId: contractAddress,
+      actions: [
+        transactions.functionCall(
+          methodName,
+          argsBuffer,
+          new BN(gas || '30000000000000'), // 30 TGas default
+          new BN(deposit || '0'),
+        ),
+      ],
+    });
+
+    if (!result) {
+      throw new Error('Transaction was rejected or failed');
+    }
+
+    // Extract transaction info
+    let transactionHash: string | undefined;
+    let logs: string[] = [];
+    let returnValue: any = null;
+
+    if (typeof result === 'object') {
+      // Extract transaction hash
+      if ('transaction' in result) {
+        transactionHash = (result as any).transaction?.hash || (result as any).transaction_outcome?.id;
+      } else if ('transaction_outcome' in result) {
+        transactionHash = (result as any).transaction_outcome?.id;
+      }
+
+      // Extract logs from receipts
+      if ('receipts_outcome' in result) {
+        const receiptsOutcome = (result as any).receipts_outcome;
+        if (Array.isArray(receiptsOutcome)) {
+          for (const receipt of receiptsOutcome) {
+            if (receipt.outcome?.logs) {
+              logs.push(...receipt.outcome.logs);
+            }
+          }
+        }
+      }
+
+      // Extract return value from status
+      if ('status' in result) {
+        const status = (result as any).status;
+        if (status?.SuccessValue) {
+          try {
+            // SuccessValue is base64 encoded
+            const decoded = atob(status.SuccessValue);
+            returnValue = decoded ? JSON.parse(decoded) : null;
+          } catch {
+            returnValue = status.SuccessValue;
+          }
+        } else if (status?.Failure) {
+          return {
+            success: false,
+            error: JSON.stringify(status.Failure, null, 2),
+            transactionHash,
+            logs,
+          };
+        }
+      }
+
+      // Check for final execution status
+      if ('final_execution_status' in result) {
+        const finalStatus = (result as any).final_execution_status;
+        if (finalStatus === 'FINAL' || finalStatus === 'EXECUTED') {
+          // Transaction succeeded
+        } else if (typeof finalStatus === 'object' && finalStatus.Failure) {
+          return {
+            success: false,
+            error: JSON.stringify(finalStatus.Failure, null, 2),
+            transactionHash,
+            logs,
+          };
+        }
+      }
+    } else {
+      transactionHash = String(result);
+    }
+
+    return {
+      success: true,
+      result: returnValue,
+      transactionHash,
+      logs,
+    };
+  } catch (error) {
+    console.error('Wallet execution error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to execute method with wallet',
+    };
+  }
 }

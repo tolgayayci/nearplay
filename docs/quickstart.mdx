@@ -3,56 +3,103 @@ title: Quickstart
 description: Deploy your first NEAR contract in 5 minutes
 ---
 
-# Quickstart
-
-Get your first smart contract running in under 5 minutes.
-
 ## 1. Create an Account
 
-Go to [nearplay.app](https://nearplay.app) and sign up with your email.
+Go to [nearplay.app](https://nearplay.app) and sign in using one of the available options:
 
-<img src="/images/signup.png" alt="Sign up screen" />
+- **GitHub** - Sign in with your GitHub account
+- **Google** - Sign in with your Google account
+- **Email** - Enter your email and receive a magic link (passwordless)
+
+For email login, check your inbox and click the link to complete sign in.
+
+<Frame>
+  <img src="/images/signup.png" alt="Sign up screen" />
+</Frame>
 
 ## 2. Create a Project
 
-Click **New Project** and choose a template:
+Click **New Project** and either create a blank project or choose one of the available templates.
 
-- **Counter** - Simple state management (recommended for beginners)
-- **NEP-141** - Fungible token standard
-- **NEP-171** - NFT standard
-
-<img src="/images/new-project.png" alt="New project dialog" />
+<Frame>
+  <img src="/images/new-project.png" alt="New project dialog" />
+</Frame>
 
 ## 3. Write Your Code
 
-The editor opens with your template code. Make changes or keep the default.
+The editor opens with your project code. If you created a blank project, you can paste this example into `lib.rs`:
 
 ```rust
+// Find all our documentation at https://docs.near.org
+use near_sdk::{log, near};
+
+// Define the contract structure
 #[near(contract_state)]
-pub struct Counter {
-    value: i32,
+pub struct Contract {
+    greeting: String,
 }
 
+// Define the default, which automatically initializes the contract
+impl Default for Contract {
+    fn default() -> Self {
+        Self {
+            greeting: "Hello".to_string(),
+        }
+    }
+}
+
+// Implement the contract structure
 #[near]
-impl Counter {
-    pub fn increment(&mut self) {
-        self.value += 1;
+impl Contract {
+    // Public method - returns the greeting saved, defaulting to DEFAULT_GREETING
+    pub fn get_greeting(&self) -> String {
+        self.greeting.clone()
     }
 
-    pub fn get_value(&self) -> i32 {
-        self.value
+    // Public method - accepts a greeting, such as "howdy", and records it
+    pub fn set_greeting(&mut self, greeting: String) {
+        log!("Saving greeting: {}", greeting);
+        self.greeting = greeting;
+    }
+}
+
+/*
+ * The rest of this file holds the inline tests for the code above
+ * Learn more about Rust tests: https://doc.rust-lang.org/book/ch11-01-writing-tests.html
+ */
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn get_default_greeting() {
+        let contract = Contract::default();
+        // this test did not call set_greeting so should return the default "Hello" greeting
+        assert_eq!(contract.get_greeting(), "Hello");
+    }
+
+    #[test]
+    fn set_then_get_greeting() {
+        let mut contract = Contract::default();
+        contract.set_greeting("howdy".to_string());
+        assert_eq!(contract.get_greeting(), "howdy");
     }
 }
 ```
 
 ## 4. Compile
 
-Click the **Compile** button. The compiler will:
-- Build your Rust code to WASM
+Click the **Compile** button. This will use our backend compilation service to:
+
+- Build your Rust code to WASM using `cargo-near`
 - Show any errors with line numbers
 - Display the compiled contract size
 
-<img src="/images/compile.png" alt="Compilation output" />
+You can see detailed compilation output in the terminal panel at the bottom of the project page. Click the **expand button** in the top-right corner of the terminal to open a detailed fullscreen view.
+
+<Frame>
+  <img src="/images/compile.png" alt="Compilation output" />
+</Frame>
 
 ## 5. Deploy
 
@@ -60,37 +107,60 @@ Click **Deploy** to send your contract to the blockchain.
 
 <Tabs>
   <Tab title="Playground (Testnet)">
-    Free deployment to testnet. No wallet needed.
+    Free deployment to NEAR testnet using our pre-funded playground wallet system.
 
-    Your contract gets a unique address like `user-project-123.nearplay.testnet`
+    - **No wallet connection needed** - We handle everything for you
+    - **Automatically funded** - 2 NEAR is transferred to your playground wallet
+    - Your contract gets a unique address like `user-project-123.nearplay.testnet`
+
+    Perfect for development and testing!
+
+    <Frame>
+      <img src="/images/deploy-testnet.png" alt="Testnet deploy dialog" />
+    </Frame>
   </Tab>
   <Tab title="External Wallet (Mainnet)">
-    Connect HOT or Meteor wallet to deploy with real NEAR tokens.
+    <Warning>
+      **Important: How Mainnet Deployment Works**
+
+      NEAR accounts cannot deploy contracts directly through web wallets. This is because wallets only expose **function-call keys** to web applications for security reasons, not the **full-access keys** required for contract deployment.
+
+      To enable mainnet deployment, we use a **factory contract** (`factory.nearplay-app.near`). When you deploy:
+
+      1. Connect your Meteor wallet
+      2. Your contract is deployed as a sub-account of the factory (e.g., `yourname-123.factory.nearplay-app.near`)
+      3. You pay the deployment cost (~2 NEAR) from your wallet
+
+      **Not recommended for financially critical applications.** The factory pattern means you don't have full control over the contract account. For production applications handling significant value, deploy using NEAR CLI with full-access keys.
+    </Warning>
+
+    Connect Meteor wallet to deploy with real NEAR tokens.
+
+    <Frame>
+      <img src="/images/deploy-mainnet.png" alt="Mainnet deploy dialog" />
+    </Frame>
   </Tab>
 </Tabs>
 
-<img src="/images/deploy.png" alt="Deploy dialog" />
-
 ## 6. Interact
 
-After deployment, the **Contract Interface** tab shows your methods.
+After deployment, the **Contract Interface** tab shows your contract methods. You can use this interface to:
 
-- **View methods** (free) - Read data without transactions
-- **Call methods** - Execute functions that modify state
+- Call any contract method
+- View the contract address
+- Open the contract on NearBlocks explorer
+- See your call history on that contract
 
-<img src="/images/contract-ui.png" alt="Contract interface" />
+<Note>
+**Testnet (Playground Mode):** No wallet connection needed. You can freely call any function - both view and change methods - using the playground wallet.
+</Note>
 
-Try clicking **increment** a few times, then **get_value** to see the result.
+<Note>
+**Mainnet (External Wallet):** View methods are free to call without wallet connection. Change methods require your connected wallet to sign transactions and pay gas fees.
+</Note>
 
----
+<Frame>
+  <img src="/images/contract-ui.png" alt="Contract interface" />
+</Frame>
 
-## Next Steps
-
-<CardGroup cols={2}>
-  <Card title="Build Your First Contract" icon="graduation-cap" href="/guides/first-contract">
-    Step-by-step tutorial
-  </Card>
-  <Card title="Explore Templates" icon="cube" href="/features/templates">
-    NEP-141, NEP-171, and more
-  </Card>
-</CardGroup>
+Try calling **get_greeting** to see the default value, then use **set_greeting** to change it!

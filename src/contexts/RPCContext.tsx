@@ -82,8 +82,8 @@ export function RPCProvider({ children }: RPCProviderProps) {
 
   const [selectedMainnetProvider, setSelectedMainnetProvider] = useState(() =>
     typeof window !== 'undefined'
-      ? localStorage.getItem('rpc_mainnet_provider') || 'near-official'
-      : 'near-official'
+      ? localStorage.getItem('rpc_mainnet_provider') || 'fastnear'
+      : 'fastnear'
   );
 
   const [customProviders, setCustomProviders] = useState<RPCProvider[]>(() => {
@@ -290,7 +290,7 @@ export function RPCProvider({ children }: RPCProviderProps) {
       setSelectedTestnetProvider('near-official');
     }
     if (selectedMainnetProvider === providerId) {
-      setSelectedMainnetProvider('near-official');
+      setSelectedMainnetProvider('fastnear');
     }
   }, [selectedTestnetProvider, selectedMainnetProvider]);
 
@@ -303,10 +303,10 @@ export function RPCProvider({ children }: RPCProviderProps) {
       return network === 'testnet' ? provider.testnetUrl : provider.mainnetUrl;
     }
 
-    // Fallback to official
+    // Fallback to fastnear for mainnet (near-official is deprecated), official for testnet
     return network === 'testnet'
       ? DEFAULT_PROVIDERS[0].testnetUrl
-      : DEFAULT_PROVIDERS[0].mainnetUrl;
+      : DEFAULT_PROVIDERS[1].mainnetUrl; // fastnear
   }, [providers, selectedTestnetProvider, selectedMainnetProvider]);
 
   // Get provider by ID

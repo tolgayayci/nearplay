@@ -19,16 +19,17 @@ import {
   Info,
   Copy,
   FileText,
+  Wallet,
 } from 'lucide-react';
 import { ABIMethod } from '@/lib/types';
 import { ABIMethodSignature } from './ABIMethodSignature';
-import { executeNearMethod, getMethodTypeLabel } from '@/lib/nearContract';
+import { executeNearMethod, executeChangeMethodWithWallet, parseNearValue } from '@/lib/nearContract';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getExplorerTxUrl, getExplorerAccountUrl } from '@/lib/config';
 import { useRPC } from '@/contexts/RPCContext';
-import { useWallet } from '@/contexts/WalletContext';
+import { useWallet, Network } from '@/contexts/WalletContext';
 import {
   Tooltip,
   TooltipContent,
@@ -69,7 +70,16 @@ export function ABIExecuteDialog({
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const { toast } = useToast();
   const { getCurrentRpcUrl } = useRPC();
-  const { network } = useWallet();
+  const { selector, isConnected, connectWallet } = useWallet();
+
+  // Determine network from contract address (more reliable than wallet setting)
+  const contractNetwork: Network = contractAddress.endsWith('.near') ? 'mainnet' : 'testnet';
+
+  // Check if this is a view method (no signing needed)
+  const isViewMethod = method.stateMutability === 'view' || method.stateMutability === 'pure';
+
+  // For mainnet change methods, we need wallet connection
+  const needsWalletConnection = !isViewMethod && contractNetwork === 'mainnet' && !isConnected;
 
   const handleInputChange = (name: string, value: string) => {
     setInputs(prev => ({ ...prev, [name]: value }));
@@ -78,22 +88,66 @@ export function ABIExecuteDialog({
   const handleExecute = async () => {
     if (!method || !contractAddress) return;
 
+    // For mainnet change methods, check wallet connection
+    if (!isViewMethod && contractNetwork === 'mainnet') {
+      if (!selector || !isConnected) {
+        toast({
+          title: "Wallet Required",
+          description: "Please connect your wallet to execute change methods on mainnet",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setIsExecuting(true);
     setResult({ status: 'pending' });
 
     try {
-      // Determine network from contract address (more reliable than wallet setting)
-      // .near = mainnet, .testnet = testnet
-      const contractNetwork = contractAddress.endsWith('.near') ? 'mainnet' : 'testnet';
       const rpcUrl = getCurrentRpcUrl(contractNetwork);
 
-      // Execute NEAR method through backend with RPC URL
-      const response = await executeNearMethod(contractAddress, method, inputs, rpcUrl);
+      let response: {
+        success: boolean;
+        result?: any;
+        transactionHash?: string;
+        logs?: string[];
+        gasUsed?: string;
+        error?: string;
+        rawResponse?: any;
+      };
+
+      // Route based on method type and network
+      if (isViewMethod) {
+        // View methods work the same on both networks - use backend
+        response = await executeNearMethod(contractAddress, method, inputs, rpcUrl);
+      } else if (contractNetwork === 'mainnet' && selector) {
+        // Mainnet change methods - use connected wallet
+        // Prepare arguments
+        const args: Record<string, any> = {};
+        if (method.inputs && method.inputs.length > 0) {
+          for (const input of method.inputs) {
+            const value = inputs[input.name];
+            if (value !== undefined && value !== '') {
+              args[input.name] = parseNearValue(value, input.type);
+            }
+          }
+        }
+
+        response = await executeChangeMethodWithWallet(
+          selector,
+          contractAddress,
+          method.name,
+          args
+        );
+      } else {
+        // Testnet change methods - use backend signing (playground wallet)
+        response = await executeNearMethod(contractAddress, method, inputs, rpcUrl);
+      }
 
       if (response.success) {
         const successResult: ExecutionResult = {
           status: 'success',
-          result: response.result, // Store raw result
+          result: response.result,
           txHash: response.transactionHash,
           gasUsed: response.gasUsed,
           rawResponse: response.rawResponse,
@@ -133,7 +187,7 @@ export function ABIExecuteDialog({
         const errorResult: ExecutionResult = {
           status: 'error',
           error: response.error || 'Method execution failed',
-          result: response.result, // Include raw result for errors
+          result: response.result,
           txHash: response.transactionHash,
           gasUsed: response.gasUsed,
           rawResponse: response.rawResponse,
@@ -164,14 +218,14 @@ export function ABIExecuteDialog({
           description: "Method execution failed",
           variant: "destructive",
         });
-        return; // Don't throw, just set the error result
+        return;
       }
     } catch (error) {
       console.error('Execution error:', error);
       const errorResult: ExecutionResult = {
         status: 'error',
         error: error instanceof Error ? error.message : 'Transaction failed',
-        result: undefined, // No result for network errors
+        result: undefined,
       };
       setResult(errorResult);
 
@@ -239,7 +293,7 @@ export function ABIExecuteDialog({
                       </span>
                     </div>
                     <a
-                      href={getExplorerAccountUrl(contractAddress)}
+                      href={getExplorerAccountUrl(contractAddress, contractNetwork)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
@@ -269,6 +323,19 @@ export function ABIExecuteDialog({
                 <ABIMethodSignature method={method} />
               </pre>
             </div>
+
+            {/* Wallet Connection Notice for Mainnet Change Methods */}
+            {needsWalletConnection && (
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <Wallet className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-amber-500">Wallet Connection Required</p>
+                  <p className="text-xs text-muted-foreground">
+                    This is a change method on mainnet. Please connect your wallet to sign and execute this transaction.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Input Parameters */}
             {method.inputs && method.inputs.length > 0 && (
@@ -320,10 +387,18 @@ export function ABIExecuteDialog({
 
                   {result.status === 'success' && (
                     <>
-                      {(result.result !== undefined || result.rawResponse) && (
+                      {/* Show return value or void message */}
+                      {result.result === null || result.result === undefined ? (
+                        // Void method - no return value
+                        <div className="p-3 bg-muted rounded-lg">
+                          <p className="text-sm text-muted-foreground">
+                            Method executed successfully (no return value)
+                          </p>
+                        </div>
+                      ) : (
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">Return Values (Raw Output)</span>
+                            <span className="text-sm font-medium">Return Value</span>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -336,16 +411,7 @@ export function ABIExecuteDialog({
                           </div>
                           <div className="max-h-[200px] overflow-y-auto rounded-lg">
                             <pre className="p-3 bg-muted rounded-lg font-mono text-xs whitespace-pre-wrap break-all">
-                              {(() => {
-                                // For view methods, show just the value
-                                // For change methods, show the full transaction details
-                                if (result.result && typeof result.result === 'object' && 'status' in result.result) {
-                                  // This is a change method with full transaction details
-                                  return JSON.stringify(result.result, null, 2);
-                                }
-                                // This is a view method or simple result
-                                return JSON.stringify(result.result, null, 2);
-                              })()}
+                              {JSON.stringify(result.result, null, 2)}
                             </pre>
                           </div>
                         </div>
@@ -355,7 +421,7 @@ export function ABIExecuteDialog({
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>Transaction Hash:</span>
                           <a
-                            href={getExplorerTxUrl(result.txHash)}
+                            href={getExplorerTxUrl(result.txHash, contractNetwork)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="font-mono hover:underline flex items-center gap-1"
@@ -412,7 +478,7 @@ export function ABIExecuteDialog({
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>Transaction Hash:</span>
                           <a
-                            href={getExplorerTxUrl(result.txHash)}
+                            href={getExplorerTxUrl(result.txHash, contractNetwork)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="font-mono hover:underline flex items-center gap-1"
@@ -441,23 +507,33 @@ export function ABIExecuteDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button 
-            disabled={isExecuting} 
-            onClick={handleExecute}
-            className="gap-2"
-          >
-            {isExecuting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Executing...
-              </>
-            ) : (
-              <>
-                <PlayCircle className="h-4 w-4" />
-                Execute
-              </>
-            )}
-          </Button>
+          {needsWalletConnection ? (
+            <Button
+              onClick={connectWallet}
+              className="gap-2"
+            >
+              <Wallet className="h-4 w-4" />
+              Connect Wallet
+            </Button>
+          ) : (
+            <Button
+              disabled={isExecuting}
+              onClick={handleExecute}
+              className="gap-2"
+            >
+              {isExecuting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Executing...
+                </>
+              ) : (
+                <>
+                  <PlayCircle className="h-4 w-4" />
+                  Execute
+                </>
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,0 +1,28 @@
+---
+title: Use Faucet
+description: Get free testnet NEAR tokens for development
+---
+
+## In NEAR Playground
+
+When developing in NEAR Playground, you don't need to worry about testnet tokens. We handle all the token logic for you automatically - your contracts are deployed and funded without any manual setup.
+
+## External Development
+
+If you're doing external development (local development, using NEAR CLI, etc.) and need testnet NEAR for an external account, you can use the NEAR Playground faucet:
+
+1. Click **Faucet** in the header navigation
+2. Enter your testnet address (e.g., `myaccount.testnet`)
+3. Click **Request** - 1 NEAR will be sent to your account
+
+<Frame>
+  <img src="/images/guides/faucet.png" alt="NEAR Faucet" />
+</Frame>
+
+<Note>
+You can request tokens once every 24 hours. Testnet tokens have no real value and are only for development and testing purposes.
+</Note>
+
+## Alternative
+
+- [near-cli](https://docs.near.org/tools/near-cli) - Use `near create-account` command to create a funded testnet account

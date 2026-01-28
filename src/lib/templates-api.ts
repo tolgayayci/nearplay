@@ -72,13 +72,22 @@ export async function getTemplates(filters?: TemplateFilters): Promise<Template[
 
   const templates = (data || []).map(formatTemplateResponse);
 
-  // Fetch author info for all templates
-  const userIds = templates.map(t => t.user_id);
+  // Fetch author info for all templates (filter out null user_ids for official templates)
+  const userIds = templates.map(t => t.user_id).filter((id): id is string => id != null);
   const authorMap = await fetchAuthors(userIds);
 
   // Attach author info to templates
   for (const template of templates) {
-    template.author = authorMap.get(template.user_id);
+    if (template.is_official) {
+      // Official templates show "Near Playground" as publisher
+      template.author = {
+        id: 'near-playground',
+        email: 'hello@nearplay.app',
+        name: 'NEAR Playground',
+      };
+    } else if (template.user_id) {
+      template.author = authorMap.get(template.user_id);
+    }
   }
 
   return templates;
@@ -104,8 +113,16 @@ export async function getTemplate(id: string): Promise<Template | null> {
 
   const template = formatTemplateResponse(data);
 
-  // Fetch author info
-  template.author = await fetchAuthor(template.user_id);
+  // Fetch author info (handle official templates with null user_id)
+  if (template.is_official) {
+    template.author = {
+      id: 'near-playground',
+      email: 'hello@nearplay.app',
+      name: 'NEAR Playground',
+    };
+  } else if (template.user_id) {
+    template.author = await fetchAuthor(template.user_id);
+  }
 
   return template;
 }
@@ -471,9 +488,7 @@ export async function useTemplate(
     throw new Error(result.message || 'Failed to create project from template');
   }
 
-  // Increment uses count
-  await incrementTemplateUses(templateId);
-
+  // Note: Uses count is incremented by the caller (UseTemplateDialog)
   return result.data.project_path;
 }
 

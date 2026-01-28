@@ -9,7 +9,6 @@ import {
 import { setupWalletSelector, WalletSelector } from '@near-wallet-selector/core';
 import { setupModal, WalletSelectorModal } from '@near-wallet-selector/modal-ui';
 import { setupMeteorWallet } from '@near-wallet-selector/meteor-wallet';
-import { setupHotWallet } from '@near-wallet-selector/hot-wallet';
 import { useRPC } from './RPCContext';
 
 // Import wallet selector CSS
@@ -119,10 +118,9 @@ export function WalletProvider({ children }: WalletProviderProps) {
       try {
         const rpcUrl = getCurrentRpcUrl(network);
 
-        // Configure supported NEAR wallets
+        // Configure supported NEAR wallets (Meteor only - most compatible)
         const walletModules = [
           setupMeteorWallet(),
-          setupHotWallet(),
         ];
 
         const newSelector = await setupWalletSelector({

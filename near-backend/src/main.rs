@@ -160,6 +160,12 @@ async fn main() -> std::io::Result<()> {
     ));
     info!("Template storage service initialized");
 
+    // Seed official templates from GitHub on startup
+    if let Err(e) = template_service.seed_official_templates().await {
+        error!("Failed to seed official templates: {}", e);
+        // Continue startup even if seeding fails
+    }
+
     HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
