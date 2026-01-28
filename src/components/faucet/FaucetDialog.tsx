@@ -31,10 +31,8 @@ import {
   AlertCircle,
   ExternalLink,
   Clock,
-  History,
 } from 'lucide-react';
 import type { FaucetStatusResponse, FaucetHistoryItem } from '@/lib/types';
-import { Badge } from '@/components/ui/badge';
 
 const formSchema = z.object({
   recipientAccount: z
@@ -413,50 +411,6 @@ export function FaucetDialog({ open, onOpenChange, userId }: FaucetDialogProps) 
           </form>
         </Form>
 
-        {/* Recent Requests History */}
-        {history.length > 0 && (
-          <div className="mt-4 pt-4 border-t">
-            <h4 className="text-sm font-medium flex items-center gap-2 mb-3">
-              <History className="h-4 w-4" />
-              Recent Requests
-            </h4>
-            <div className="space-y-2">
-              {history.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/50"
-                >
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-mono truncate max-w-[150px]">
-                      {item.recipient_account}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {new Date(item.created_at).toLocaleDateString()} {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={item.status === 'success' ? 'default' : item.status === 'pending' ? 'secondary' : 'destructive'}
-                      className="text-[10px] px-1.5"
-                    >
-                      {item.status}
-                    </Badge>
-                    {item.explorer_url && (
-                      <a
-                        href={item.explorer_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );

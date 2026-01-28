@@ -9,7 +9,7 @@ NEAR Playground includes a built-in test runner that discovers and executes your
 
 The test runner opens in a dedicated modal with two panels:
 
-- **Left Panel** - Displays discovered tests organized by type (Unit Tests, Integration Tests)
+- **Left Panel** - Displays discovered tests organized by file
 - **Right Panel** - Shows live test output as tests execute
 
 <Frame>
@@ -17,8 +17,6 @@ The test runner opens in a dedicated modal with two panels:
 </Frame>
 
 ## Writing Tests
-
-### Unit Tests
 
 Add unit tests using the standard `#[test]` attribute:
 
@@ -42,30 +40,13 @@ mod tests {
 }
 ```
 
-### Integration Tests
-
-For async tests, use `#[tokio::test]`:
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_async_operation() {
-        // Async test code
-    }
-}
-```
-
 ## Running Tests
 
 1. Click the **Tests** button in the editor toolbar
 2. The Tests Modal opens showing all discovered tests
-3. Tests are automatically grouped into **Unit Tests** and **Integration Tests**
-4. Click **Run All** to execute all tests, or click on individual tests to run them separately
-5. Watch the live output stream in the right panel
-6. View pass/fail status indicators next to each test
+3. Click **Run All Tests** to execute all tests, or click on individual tests to run them separately
+4. Watch the live output stream in the right panel
+5. View pass/fail status indicators next to each test
 
 ## Test Results
 
@@ -81,7 +62,7 @@ Each test shows its execution time, and you can click on any test to see its spe
 
 ## Features
 
-- **Automatic Discovery** - Tests are found by scanning for `#[test]` and `#[tokio::test]` attributes
+- **Automatic Discovery** - Tests are found by scanning for `#[test]` attributes
 - **Live Streaming** - Output appears in real-time as tests run
 - **Per-Test Execution** - Run all tests or select individual tests
 - **Copy Output** - Copy test results to clipboard
@@ -92,4 +73,3 @@ Each test shows its execution time, and you can click on any test to see its spe
 - Use descriptive test names that explain what's being tested
 - Test both success cases and error cases
 - Use `assert!`, `assert_eq!`, and `assert_ne!` macros
-- Add `-- --nocapture` if you need to see `println!` output
