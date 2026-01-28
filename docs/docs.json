@@ -1,0 +1,79 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "NEAR Playground",
+  "colors": {
+    "primary": "#00C08B",
+    "light": "#00EC97",
+    "dark": "#00C08B"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "anchors": [
+      {
+        "anchor": "Documentation",
+        "icon": "book-open",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/projects",
+              "guides/deployments",
+              "guides/publish-template",
+              "guides/embed-button",
+              "guides/faucet",
+              "guides/test-contracts"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "faq",
+              "best-practices"
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "href": "https://github.com/tolgayayci/nearplay",
+          "icon": "github"
+        },
+        {
+          "anchor": "NEAR Docs",
+          "href": "https://docs.near.org/smart-contracts/quickstart",
+          "icon": "book"
+        }
+      ]
+    }
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Launch App",
+        "href": "https://nearplay.app"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get Started",
+      "href": "https://nearplay.app"
+    }
+  },
+  "footer": {
+    "socials": {
+      "x": "https://x.com/Near_Playground",
+      "github": "https://github.com/tolgayayci/nearplay"
+    }
+  }
+}
