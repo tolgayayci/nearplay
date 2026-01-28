@@ -27,29 +27,60 @@ export function DeploymentInfoBar({
   const isVerified = deployment.metadata?.verified === true;
   const verifiedAt = deployment.metadata?.verified_at as string | undefined;
 
+  // Get deployer account from metadata
+  const deployerAccount = deployment.metadata?.wallet_address || deployment.metadata?.deployer_account;
+
   const explorerUrl = getExplorerUrl(deployment.contract_address, network);
+  const deployerExplorerUrl = deployerAccount ? getExplorerUrl(deployerAccount, network) : null;
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-sm text-muted-foreground">Deployed by:</span>
 
-      {/* NEAR Playground Badge */}
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge
-              variant="secondary"
-              className="gap-1.5 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15 border-green-500/20"
-            >
-              <Rocket className="h-3 w-3" />
-              NEAR Playground
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Contract deployed using NEAR Playground</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      {/* Deployer Account Badge */}
+      {deployerAccount ? (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a
+                href={deployerExplorerUrl || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex"
+              >
+                <Badge
+                  variant="secondary"
+                  className="gap-1.5 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15 border-green-500/20 cursor-pointer font-mono text-xs"
+                >
+                  <Rocket className="h-3 w-3" />
+                  {deployerAccount}
+                  <ExternalLink className="h-3 w-3" />
+                </Badge>
+              </a>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>View deployer account on NEARBlocks</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="secondary"
+                className="gap-1.5 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15 border-green-500/20"
+              >
+                <Rocket className="h-3 w-3" />
+                NEAR Playground
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Contract deployed using NEAR Playground</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
 
       {/* Network Badge */}
       <TooltipProvider>

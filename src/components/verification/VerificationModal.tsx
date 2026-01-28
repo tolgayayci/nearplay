@@ -46,7 +46,7 @@ export function VerificationModal({
   network = 'testnet',
   onVerificationComplete,
 }: VerificationModalProps) {
-  const [contractId] = useState(initialContractId || '');
+  const contractId = initialContractId || '';
   const [step, setStep] = useState<VerificationStep>('idle');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<VerifyContractResult | null>(null);
