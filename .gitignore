@@ -60,3 +60,6 @@ near-backend/projects/
 near-backend/.env
 near-backend/.env.local
 near-backend/.env.production
+
+# Contracts
+contracts/**/target/

@@ -211,6 +211,7 @@ impl TerminalService {
             .current_dir(&working_dir)
             .env("NEAR_RPC_URL", effective_rpc_url)
             .env("NEAR_CLI_TESTNET_RPC_SERVER_URL", effective_rpc_url)
+            .env("NEAR_SANDBOX_BIN_PATH", "/usr/bin/false") // Skip sandbox download on ARM Linux
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
