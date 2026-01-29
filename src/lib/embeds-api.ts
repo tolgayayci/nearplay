@@ -125,7 +125,7 @@ export async function createEmbed(input: CreateEmbedInput): Promise<Embed> {
     throw new Error('Must be logged in to create an embed');
   }
 
-  // Prepare snapshot data for project embeds
+  // Prepare snapshot data for project and template embeds
   let snapshotCode: string | null = null;
   let snapshotName: string | null = null;
   let snapshotDescription: string | null = null;
@@ -147,6 +147,23 @@ export async function createEmbed(input: CreateEmbedInput): Promise<Embed> {
       snapshotCode = project.code;
       snapshotName = project.name;
       snapshotDescription = project.description;
+    }
+  } else if (input.source_type === 'template' && input.template_id) {
+    // Fetch template data to create a snapshot
+    const { data: template, error: templateError } = await supabase
+      .from('templates')
+      .select('name, description')
+      .eq('id', input.template_id)
+      .single();
+
+    if (templateError) {
+      console.error('Error fetching template for snapshot:', templateError);
+      throw new Error('Failed to fetch template data');
+    }
+
+    if (template) {
+      snapshotName = template.name;
+      snapshotDescription = template.description;
     }
   }
 

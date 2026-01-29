@@ -69,9 +69,9 @@ export function EmbedPage() {
         return;
       }
 
-      // Check if template source is missing (deleted or unpublished)
-      if (embedData.source_type === 'template' && !embedData.template) {
-        console.log('Template source not found for embed');
+      // Check if template source is missing (deleted or unpublished) and no snapshot data
+      if (embedData.source_type === 'template' && !embedData.template && !embedData.snapshot_name) {
+        console.log('Template source not found for embed (no template or snapshot data)');
         setSourceNotFound(true);
         setEmbed(embedData); // Still set embed to show partial info
         return;
@@ -126,34 +126,42 @@ export function EmbedPage() {
       const newProjectId = crypto.randomUUID();
 
       // Create project based on source type
-      if (embed.source_type === 'template' && embed.template) {
+      if (embed.source_type === 'template' && (embed.template || embed.template_id)) {
+        const templateId = embed.template?.id || embed.template_id;
+        const templateName = embed.template?.name || 'template';
+        const templateDescription = embed.template?.description || null;
+
+        if (!templateId) {
+          throw new Error('Template not found');
+        }
+
         // Create project record
         const { error: dbError } = await supabase.from('projects').insert({
           id: newProjectId,
           user_id: user.id,
-          name: embed.template.name.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-          description: embed.template.description || null,
+          name: templateName.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+          description: templateDescription,
           code: '',
           metadata: {
             created_from_embed: true,
             embed_id: embed.id,
             embed_source_type: embed.source_type,
-            embed_source_name: embed.template.name,
+            embed_source_name: templateName,
           },
         });
 
         if (dbError) throw new Error(dbError.message);
 
         // Use the template
-        await useTemplate(embed.template.id, user.id, newProjectId);
+        await useTemplate(templateId, user.id, newProjectId);
 
         toast({
           title: 'Project created',
-          description: `Created from "${embed.template.name}" template`,
+          description: `Created from "${templateName}" template`,
         });
 
         navigate(`/projects/${newProjectId}`);
-      } else if (embed.source_type === 'project' && (embed.code || embed.project)) {
+      } else if (embed.source_type === 'project' && (embed.code || embed.project || embed.snapshot_name)) {
         // Create project from snapshot data
         const projectName = embed.snapshot_name || embed.project?.name || 'Unnamed Project';
         const projectDescription = embed.snapshot_description || embed.project?.description;
@@ -184,6 +192,8 @@ export function EmbedPage() {
       } else if (embed.source_type === 'github' && embed.github_url) {
         // Handle GitHub import
         navigate(`/projects?import=${encodeURIComponent(embed.github_url)}`);
+      } else {
+        throw new Error('Unable to create project: embed source data is missing');
       }
     } catch (error) {
       console.error('Error creating project:', error);
@@ -245,17 +255,17 @@ export function EmbedPage() {
   }
 
   // Get source name and description
-  // For project embeds, prefer snapshot data (new), fall back to joined data (legacy)
+  // Prefer snapshot data (new), fall back to joined data (legacy)
   const sourceName =
     embed?.source_type === 'template'
-      ? embed.template?.name
+      ? embed.snapshot_name || embed.template?.name
       : embed?.source_type === 'project'
       ? embed.snapshot_name || embed.project?.name
       : 'GitHub Repository';
 
   const sourceDescription =
     embed?.source_type === 'template'
-      ? embed.template?.description
+      ? embed.snapshot_description || embed.template?.description
       : embed?.source_type === 'project'
       ? embed.snapshot_description || embed.project?.description
       : embed?.github_url;
