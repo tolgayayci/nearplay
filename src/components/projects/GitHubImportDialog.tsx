@@ -65,9 +65,10 @@ interface GitHubImportDialogProps {
   onClose: () => void;
   onSuccess: (projectId: string) => void;
   userId: string;
+  initialUrl?: string;
 }
 
-export function GitHubImportDialog({ open, onClose, onSuccess, userId }: GitHubImportDialogProps) {
+export function GitHubImportDialog({ open, onClose, onSuccess, userId, initialUrl }: GitHubImportDialogProps) {
   const [importState, setImportState] = useState<ImportState>('initial');
   const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
   const [parsedUrl, setParsedUrl] = useState<{ owner: string; repo: string; url: string } | null>(null);
@@ -85,7 +86,7 @@ export function GitHubImportDialog({ open, onClose, onSuccess, userId }: GitHubI
     defaultValues: { name: '', description: '' },
   });
 
-  // Reset state when dialog closes
+  // Reset state when dialog closes, or set initial URL when opening
   useEffect(() => {
     if (!open) {
       setImportState('initial');
@@ -95,8 +96,15 @@ export function GitHubImportDialog({ open, onClose, onSuccess, userId }: GitHubI
       setFilesCount(0);
       urlForm.reset();
       projectForm.reset();
+    } else if (initialUrl) {
+      // Pre-fill URL and auto-validate when opening with initialUrl
+      urlForm.setValue('url', initialUrl);
+      // Trigger validation after a brief delay to ensure form is ready
+      setTimeout(() => {
+        urlForm.handleSubmit(handleValidateUrl)();
+      }, 100);
     }
-  }, [open, urlForm, projectForm]);
+  }, [open, urlForm, projectForm, initialUrl]);
 
   // Auto-fill project form when repo is validated
   useEffect(() => {

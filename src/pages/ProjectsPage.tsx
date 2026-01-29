@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Code2Icon, Rocket, Droplets, Layout, Link2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -38,7 +38,9 @@ export function ProjectsPage() {
   const [showGitHubImportDialog, setShowGitHubImportDialog] = useState(false);
   const [networkFilter, setNetworkFilter] = useState<NetworkFilter>('all');
   const [walletFilter, setWalletFilter] = useState<WalletFilter>('all');
+  const [importUrl, setImportUrl] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -60,6 +62,18 @@ export function ProjectsPage() {
       fetchDeployments();
     }
   }, [networkFilter, walletFilter]);
+
+  // Handle import URL parameter from embed pages
+  useEffect(() => {
+    const importParam = searchParams.get('import');
+    if (importParam && user) {
+      setImportUrl(importParam);
+      setShowGitHubImportDialog(true);
+      // Clear the URL parameter
+      searchParams.delete('import');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, user, setSearchParams]);
 
   const fetchProjects = async () => {
     if (!user) {
@@ -529,13 +543,18 @@ export function ProjectsPage() {
 
       <GitHubImportDialog
         open={showGitHubImportDialog}
-        onClose={() => setShowGitHubImportDialog(false)}
+        onClose={() => {
+          setShowGitHubImportDialog(false);
+          setImportUrl(null);
+        }}
         onSuccess={async (projectId) => {
           setShowGitHubImportDialog(false);
+          setImportUrl(null);
           await fetchProjects();
           navigate(`/projects/${projectId}`);
         }}
         userId={user?.id || ''}
+        initialUrl={importUrl || undefined}
       />
 
       <FaucetDialog
