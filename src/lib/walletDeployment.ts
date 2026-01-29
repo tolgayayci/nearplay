@@ -138,6 +138,11 @@ export async function deployWithFactory(
   // Fetch the compiled WASM from backend
   const wasmCode = await fetchWasmCode(userId, projectId);
 
+  // Calculate WASM hash for verification
+  const hashBuffer = await crypto.subtle.digest('SHA-256', wasmCode);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const wasmHash = 'sha256:' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
   // Generate unique contract name based on user and project
   const timestamp = Date.now();
   const shortUserId = userId.slice(0, 8);
@@ -203,6 +208,7 @@ export async function deployWithFactory(
     explorerAccountUrl,
     network,
     blockHeight,
+    wasm_hash: wasmHash,
   };
 }
 

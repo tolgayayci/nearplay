@@ -256,6 +256,7 @@ export function DeployDialog({
             wallet_type: 'external',
             wallet_address: accountId,
             wallet_name: walletId || 'Unknown Wallet',
+            wasm_hash: result.wasm_hash,
           }
         });
 
