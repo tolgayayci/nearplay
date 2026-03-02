@@ -92,7 +92,7 @@ export function TemplateGallery({
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
+  const itemsPerPage = 10;
 
   // Reset page when filters change
   useEffect(() => {
@@ -131,7 +131,7 @@ export function TemplateGallery({
       );
     }
 
-    // Sort - default to created_at for newest
+    // Sort within groups (official always first, then by user-chosen sort)
     switch (sortBy) {
       case 'newest':
         result.sort(
@@ -150,6 +150,12 @@ export function TemplateGallery({
         result.sort((a, b) => (b.likes_count || 0) - (a.likes_count || 0));
         break;
     }
+
+    // Always pin official templates above community ones
+    result.sort((a, b) => {
+      if (a.is_official === b.is_official) return 0;
+      return a.is_official ? -1 : 1;
+    });
 
     return result;
   }, [templates, searchQuery, selectedCategory, selectedDifficulty, selectedTags, sortBy]);

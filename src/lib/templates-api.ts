@@ -46,7 +46,12 @@ export async function getTemplates(filters?: TemplateFilters): Promise<Template[
     query = query.eq('is_featured', filters.featured);
   }
 
-  // Apply sorting
+  // Official templates always first, then by display_order within official group
+  query = query
+    .order('is_official', { ascending: false })
+    .order('display_order', { ascending: true });
+
+  // Apply secondary user-chosen sort
   switch (filters?.sortBy) {
     case 'popular':
       query = query.order('view_count', { ascending: false });

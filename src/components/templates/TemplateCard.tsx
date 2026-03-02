@@ -15,6 +15,16 @@ import {
   Github,
   Star,
   FileCode,
+  Gift,
+  Database,
+  Layers,
+  Archive,
+  Factory,
+  RefreshCw,
+  BookOpen,
+  GraduationCap,
+  Gavel,
+  BookMarked,
   LucideIcon,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -28,6 +38,17 @@ const iconMap: Record<string, LucideIcon> = {
   Dices,
   Target,
   FileCode,
+  Gift,
+  Database,
+  Layers,
+  Archive,
+  Factory,
+  RefreshCw,
+  BookOpen,
+  GraduationCap,
+  Heart,
+  Gavel,
+  BookMarked,
 };
 
 // Difficulty colors
